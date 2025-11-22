@@ -51,6 +51,36 @@ function getScriptPath {
 }
 
 # ==========================================================
+# Helper: Get Git Commit SHA
+# ==========================================================
+function getGitCommitSha {
+    try {
+        # Check if we're in a git repository
+        $gitDir = git rev-parse --git-dir 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $fullSha = git rev-parse HEAD 2>$null
+            $shortSha = git rev-parse --short HEAD 2>$null
+            
+            if ($LASTEXITCODE -eq 0 -and $fullSha -and $shortSha) {
+                return [PSCustomObject]@{
+                    Full = $fullSha.Trim()
+                    Short = $shortSha.Trim()
+                    Available = $true
+                }
+            }
+        }
+    } catch {
+        # Git not available or not a git repository
+    }
+    
+    return [PSCustomObject]@{
+        Full = "Not Available"
+        Short = "N/A"
+        Available = $false
+    }
+}
+
+# ==========================================================
 # Helper: Check Console Width
 # =========================================================
 function checkConsoleWidth {
@@ -59,6 +89,8 @@ function checkConsoleWidth {
     $currentWidth = $Host.UI.RawUI.WindowSize.Width
 
     if ($currentWidth -lt $requiredWidth) {
+        [Console]::Beep()
+
         Write-Host ""
         Write-Host " WARNING:" -ForegroundColor Red
 
@@ -72,6 +104,15 @@ function checkConsoleWidth {
 
         Write-Host " Resize your window or use classic PowerShell console." -ForegroundColor Red
         Write-Host ""
+        
+        Write-Host " Press any key to continue..." -ForegroundColor Yellow
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        
+        # Clear the "Press any key" line
+        $Host.UI.RawUI.CursorPosition = @{X=0; Y=$Host.UI.RawUI.CursorPosition.Y-1}
+        Write-Host (" " * 50)
+        $Host.UI.RawUI.CursorPosition = @{X=0; Y=$Host.UI.RawUI.CursorPosition.Y-1}
+
     }
 
 }
@@ -110,8 +151,14 @@ function getVmwareServicesStatus {
 
     if (-not $services) { return "None" }
 
+    # Calculate the maximum service name length for alignment
+    $maxNameLength = ($services | ForEach-Object { $_.DisplayName.Length } | Measure-Object -Maximum).Maximum
+    
     $indent = " " * 19
-    return ($services | ForEach-Object { "$($_.DisplayName) ($($_.Status))" }) -join ("`n$indent ")
+    return ($services | ForEach-Object { 
+        $paddedName = $_.DisplayName.PadRight($maxNameLength)
+        "$paddedName ($($_.Status))"
+    }) -join ("`n$indent")
 }
 
 # ==========================================================
@@ -160,17 +207,17 @@ function showVmwareEnvironment {
     param([psobject]$config)
 
     Write-Host ""
-    Write-Host " VMware Desktop   : $($config.vmDesktopCore)" -ForegroundColor Cyan
-    Write-Host " VMware Version   : $($config.vmProductVersion)" -ForegroundColor Cyan
-    Write-Host " Install Path     : $($config.vmInstallPath)" -ForegroundColor Cyan
-    Write-Host " Default VM Path  : $($config.defaultVmPath)" -ForegroundColor Cyan
-    Write-Host " Windows Services : $($config.vmServices)" -ForegroundColor Cyan
+    Write-Host "VMware Desktop   : $($config.vmDesktopCore)" -ForegroundColor Cyan
+    Write-Host "VMware Version   : $($config.vmProductVersion)" -ForegroundColor Cyan
+    Write-Host "Install Path     : $($config.vmInstallPath)" -ForegroundColor Cyan
+    Write-Host "Default VM Path  : $($config.defaultVmPath)" -ForegroundColor Cyan
+    Write-Host "Windows Services : $($config.vmServices)" -ForegroundColor Cyan
 
     if ($config.vmInstalledInfo) {
-        Write-Host " VMware Installed : $($config.vmInstalledInfo.Name)" -ForegroundColor Cyan
-        Write-Host " Version          : $($config.vmInstalledInfo.Version)" -ForegroundColor Cyan
+        Write-Host "VMware Installed : $($config.vmInstalledInfo.Name)" -ForegroundColor Cyan
+        Write-Host "Version          : $($config.vmInstalledInfo.Version)" -ForegroundColor Cyan
     } else {
-        Write-Host " VMware Workstation is NOT installed." -ForegroundColor Red
+        Write-Host "VMware Workstation is NOT installed." -ForegroundColor Red
     }
 }
 
@@ -192,17 +239,6 @@ function getVmInfo {
 
     $vmPath = $vmx.FullName
     $vmDir  = $vmx.DirectoryName
-
-    # Snapshot Count
-    $deltaCount = (Get-ChildItem -LiteralPath $vmDir -Filter "*-000*.vmdk" -ErrorAction SilentlyContinue).Count
-    $vmsdPath = Join-Path $vmDir "$($vmx.BaseName).vmsd"
-    $vmsdCount = 0
-
-    if (Test-Path $vmsdPath) {
-        $vmsdCount = (Select-String -Path $vmsdPath -Pattern "snapshot[0-9]+\\.uid" -ErrorAction SilentlyContinue).Count
-    }
-
-    $snapshotCount = [Math]::Max($deltaCount, $vmsdCount)
 
     # Guest OS
     $osLine = Select-String -Path $vmPath -Pattern 'guestOS\s*=\s*".*"' | Select-Object -First 1
@@ -237,6 +273,8 @@ function getVmInfo {
     $parentVmName = ""
     $parentDisk = ""
     $vmType = "Standalone"
+    $standalone = 1
+    $clone = 0
 
     if ($descriptorFile -and $descriptorFile.Length -gt 0) {
         $descLines = Get-Content -LiteralPath $descriptorFile.FullName -TotalCount 50 -ErrorAction SilentlyContinue
@@ -257,7 +295,29 @@ function getVmInfo {
             if ($parentDir -ne $vmDir) {
                 $vmType = "Clone"
                 $parentVmName = Split-Path $parentDir -Leaf
+                $standalone = 0
+                $clone = 1
             }
+        }
+    }
+
+    # Snapshot Count (calculate after VM type determination)
+    # Use .vmsd file as primary source for snapshot count (most reliable)
+    $vmsdPath = Join-Path $vmDir "$($vmx.BaseName).vmsd"
+    $snapshotCount = 0
+
+    if (Test-Path $vmsdPath) {
+        # Count unique snapshots in .vmsd file (most accurate method)
+        $vmsdContent = Get-Content -Path $vmsdPath -ErrorAction SilentlyContinue
+        $snapshotCount = ($vmsdContent | Where-Object { $_ -match '^snapshot[0-9]+\.uid' }).Count
+    } else {
+        # Fallback: Look for snapshot-specific delta files (exclude clone deltas)
+        # Only count if this is NOT a clone VM (clones have delta files but aren't snapshots)
+        if ($vmType -eq "Standalone") {
+            $deltaFiles = Get-ChildItem -LiteralPath $vmDir -Name "*.vmdk" -ErrorAction SilentlyContinue | Where-Object { 
+                $_ -match '-[0-9]{6}\.vmdk$' -and $_ -notmatch 'flat\.vmdk$'
+            }
+            $snapshotCount = $deltaFiles.Count
         }
     }
 
@@ -274,6 +334,9 @@ function getVmInfo {
         SizeBytes      = $sizeBytes
         Created        = $created
         SnapshotCount  = $snapshotCount
+
+        Standalone     = $standalone
+        Clone          = $clone
     }
 }
 
@@ -285,16 +348,33 @@ function showVMInfo {
 
     $totalVms = $vmDetails.Count
     $totalSnapshots = ($vmDetails | Measure-Object -Property SnapshotCount -Sum).Sum
+    $totalStandalone = ($vmDetails | Measure-Object -Property Standalone -Sum).Sum
+    $totalClones = ($vmDetails | Measure-Object -Property Clone -Sum).Sum
 
     $totalBytes = ($vmDetails | Measure-Object -Property SizeBytes -Sum).Sum
-    # Convert for readable display
+    $totalBytes = ($vmDetails | Measure-Object -Property SizeBytes -Sum).Sum
+    # Convert for readable display with TB support
+    $totalTB = $totalBytes / 1TB
     $totalGB = $totalBytes / 1GB
     $totalMB = $totalBytes / 1MB
+    $totalKB = $totalBytes / 1KB
 
     Write-Host " "
-    Write-Host " Total VMs        : $totalVms" -ForegroundColor Cyan
-    Write-Host " Total Snapshots  : $totalSnapshots" -ForegroundColor Cyan
-    Write-Host (" Total Size       : {0:N2} GB  ({1:N2} MB)" -f $totalGB, $totalMB)  -ForegroundColor Cyan
+    Write-Host "Total VMs        : $totalVms" -ForegroundColor Green
+    Write-Host "Total Standalone : $totalStandalone" -ForegroundColor Green
+    Write-Host "Total Clones     : $totalClones" -ForegroundColor Green
+    Write-Host "Total Snapshots  : $totalSnapshots" -ForegroundColor Green
+    
+    # Display size with appropriate unit
+    if ($totalBytes -ge 1TB) {
+        Write-Host ("Total Size       : {0:N2} TB  ({1:N2} GB)" -f $totalTB, $totalGB) -ForegroundColor Green
+    } 
+    elseif ($totalBytes -ge 1GB) {
+        Write-Host ("Total Size       : {0:N2} GB  ({1:N2} MB)" -f $totalGB, $totalMB) -ForegroundColor Green
+    } 
+    else {
+        Write-Host ("Total Size       : {0:N2} MB  ({1:N2} KB)" -f $totalMB, $totalKB) -ForegroundColor Green
+    }
 
 }
 
@@ -474,6 +554,7 @@ function init {
 
     $scriptPath    = getScriptPath
     $defaultVmPath = getVmwareDefaultVmPath
+    $gitSha        = getGitCommitSha
 
     $scriptVersion = "v1.0.3"
     $scriptName    = Split-Path -Leaf $scriptPath
@@ -500,6 +581,7 @@ function init {
         Report           = $report
         ShowSummaryTable = $showSummaryTable
         DebugMode        = $debugMode
+        GitSha           = $gitSha
 
         vmDesktopCore     = getVmwareRegByKey "Core"
         vmProductVersion  = getVmwareRegByKey "ProductVersion"
@@ -526,18 +608,34 @@ function showAppInfo {
 
     $currentWidth = $Host.UI.RawUI.WindowSize.Width
 
-    Write-Host "============================================================" -ForegroundColor Yellow
-    Write-Host " $($config.ScriptName) | Version: $($config.ScriptVersion) | Date: $($config.ScriptDate)" -ForegroundColor Yellow
-    Write-Host "============================================================" -ForegroundColor Yellow
-    Write-Host " Console Width    : $currentWidth" -ForegroundColor Yellow
-    Write-Host " Script Location  : $($config.Root)" -ForegroundColor Yellow
-    Write-Host " Running From     : $($config.RunningFrom)" -ForegroundColor Yellow
-    Write-Host " Report Output    : $($config.Report)" -ForegroundColor Yellow
-    Write-Host " Show Summary     : $($config.ShowSummaryTable)" -ForegroundColor Yellow
-    Write-Host " Debug Mode       : $($config.DebugMode)" -ForegroundColor Yellow
-    Write-Host " User Name        : $($config.RunningUser)" -ForegroundColor Yellow
-    Write-Host " Machine Name     : $($config.RunningMachine)" -ForegroundColor Yellow
-    Write-Host " Identity         : $($config.RunningIdentity)" -ForegroundColor Yellow
+    Write-Host "=======================================================================" -ForegroundColor Yellow
+    
+    # Build banner with different colors for each component
+    # Write-Host " " -NoNewline
+    Write-Host "$($config.ScriptName)" -ForegroundColor White -NoNewline
+    Write-Host " | Version: " -ForegroundColor Yellow -NoNewline
+    Write-Host "$($config.ScriptVersion)" -ForegroundColor Green -NoNewline
+    Write-Host " | SHA-1: " -ForegroundColor Yellow -NoNewline
+    
+    if ($config.GitSha.Available) {
+        Write-Host "$($config.GitSha.Short)" -ForegroundColor Green -NoNewline
+    } else {
+        Write-Host "N/A" -ForegroundColor Green -NoNewline
+    }
+    
+    Write-Host " | Date: " -ForegroundColor Yellow -NoNewline
+    Write-Host "$($config.ScriptDate)" -ForegroundColor Green
+    Write-Host "=======================================================================" -ForegroundColor Yellow
+    write-Host ""
+    Write-Host "Console Width    : $currentWidth" -ForegroundColor Yellow
+    Write-Host "Script Location  : $($config.Root)" -ForegroundColor Yellow
+    Write-Host "Running From     : $($config.RunningFrom)" -ForegroundColor Yellow
+    Write-Host "Report Output    : $($config.Report)" -ForegroundColor Yellow
+    Write-Host "Show Summary     : $($config.ShowSummaryTable)" -ForegroundColor Yellow
+    Write-Host "Debug Mode       : $($config.DebugMode)" -ForegroundColor Yellow
+    Write-Host "User Name        : $($config.RunningUser)" -ForegroundColor Yellow
+    Write-Host "Machine Name     : $($config.RunningMachine)" -ForegroundColor Yellow
+    Write-Host "Identity         : $($config.RunningIdentity)" -ForegroundColor Yellow
 }
 
 # ==========================================================
@@ -553,8 +651,11 @@ function main {
 
     # Get all VMs
     $vmList    = getAllVms($config)
+
     # Fail gracefully if no VMs found
     if (-not $vmList -or $vmList.Count -eq 0) {
+        [Console]::Beep()
+
         Write-Host ""
         Write-Host "No VMware virtual machines (.vmx files) were found under:" -ForegroundColor Red
         Write-Host "  $($config.Root)" -ForegroundColor Red
@@ -564,10 +665,9 @@ function main {
         exit 1
     }
 
-
     # Enrich VM Info
     $vmDetails = foreach ($vm in $vmList) { getVmInfo -vmx $vm -config $config }
-    $vmDetails = $vmDetails | Sort-Object VmType, Name
+    $vmDetails = $vmDetails | Sort-Object VmType, Parent, Name, Created
 
     # Display VM Info
     showVMInfo($vmDetails)
