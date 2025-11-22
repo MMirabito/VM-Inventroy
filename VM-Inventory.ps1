@@ -601,8 +601,17 @@ function init {
     # Get current user info
     $fullUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     $parts = $fullUser -split "\\", 2
-    $machineName = $parts[0]
-    $userName    = $parts[1]
+    
+    # Extract domain/machine and username
+    $domainOrMachine = $parts[0]
+    $userName = $parts[1]
+    
+    # Get actual machine name separately
+    $machineName = $env:COMPUTERNAME
+    
+    # Determine if user is domain or local
+    $isDomainUser = $domainOrMachine -ne $machineName
+    $domainName = if ($isDomainUser) { $domainOrMachine } else { $null }
 
     $scriptPath    = getScriptPath
     $defaultVmPath = getVmwareDefaultVmPath
@@ -681,9 +690,11 @@ function init {
         OSMap             = $osMap
         defaultVmPath     = $defaultVmPath
 
-        RunningIdentity   = $fullUser        # DESKTOP-NJ4PR8H\SysAdmin
+        RunningUser       = $fullUser        # DOMAIN\User or MACHINE\User
         RunningMachine    = $machineName     # DESKTOP-NJ4PR8H
-        RunningUser       = $userName        # SysAdmin
+        RunningUsername   = $userName        # SysAdmin
+        RunningDomain     = $domainName      # DOMAIN or null if local user
+        IsDomainUser      = $isDomainUser    # True if domain user, False if local
 
         RunningFrom       = $root   
     }
@@ -722,9 +733,10 @@ function showAppInfo {
     Write-Host "Report Output    : $($config.Report)" -ForegroundColor Yellow
     Write-Host "Show Summary     : $($config.ShowSummaryTable)" -ForegroundColor Yellow
     Write-Host "Debug Mode       : $($config.DebugMode)" -ForegroundColor Yellow
-    Write-Host "User Name        : $($config.RunningUser)" -ForegroundColor Yellow
+    Write-Host "User Name        : $($config.RunningUsername)" -ForegroundColor Yellow
     Write-Host "Machine Name     : $($config.RunningMachine)" -ForegroundColor Yellow
-    Write-Host "Identity         : $($config.RunningIdentity)" -ForegroundColor Yellow
+    Write-Host "Domain           : $(if ($config.RunningDomain) { $config.RunningDomain } else { 'N/A' })" -ForegroundColor Yellow
+    Write-Host "User ID          : $($config.RunningUser)" -ForegroundColor Yellow
 }
 
 # ==========================================================
