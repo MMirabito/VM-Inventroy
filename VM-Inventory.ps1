@@ -42,6 +42,43 @@ License      : Apache License 2.0
 ================================================================================
 #>
 # ==========================================================
+# Helper: Get Accurate OS from VMware Tools Guest Info
+# ==========================================================
+function getOSFromGuestInfo {
+    param([string]$vmxPath)
+    
+    try {
+        # Check for guestInfo.detailed.data with prettyName
+        $guestInfoLine = Select-String -Path $vmxPath -Pattern 'guestInfo\.detailed\.data\s*=\s*".*prettyName=.*"' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($guestInfoLine) {
+            $guestData = ($guestInfoLine.Matches[0].Value -split '=', 2)[1].Trim().Trim('"')
+            
+            # Extract prettyName from the detailed data
+            if ($guestData -match "prettyName='([^']+)'") {
+                $fullName = $matches[1]
+                
+                # Truncate verbose build information for cleaner display
+                $cleanName = $fullName
+                
+                # Remove build numbers: (Build XXXXX.XXXX)
+                $cleanName = $cleanName -replace '\s*\(Build [^)]+\)', ''
+                
+                # Clean up extra spaces and commas
+                $cleanName = $cleanName -replace ',\s*,', ','  # Remove double commas
+                $cleanName = $cleanName -replace '\s+', ' '    # Multiple spaces to single
+                $cleanName = $cleanName.Trim()                # Remove leading/trailing spaces
+                
+                return $cleanName
+            }
+        }
+    } catch {
+        # Guest info not available or malformed
+    }
+    
+    return $null
+}
+
+# ==========================================================
 # Helper: Reliable Script Path Detection
 # ==========================================================
 function getScriptPath {
@@ -240,13 +277,21 @@ function getVmInfo {
     $vmPath = $vmx.FullName
     $vmDir  = $vmx.DirectoryName
 
-    # Guest OS
-    $osLine = Select-String -Path $vmPath -Pattern 'guestOS\s*=\s*".*"' | Select-Object -First 1
-    if ($osLine) {
-        $rawOs = ($osLine.Matches[0].Value -split '=')[1].Trim().Trim('"')
-        $friendlyOs = if ($config.OSMap.ContainsKey($rawOs)) { $config.OSMap[$rawOs] } else { $rawOs }
+    # Guest OS - Try VMware Tools data first, fallback to metadata
+    $guestInfoOS = getOSFromGuestInfo -vmxPath $vmPath
+    
+    if ($guestInfoOS) {
+        # Use accurate OS from VMware Tools
+        $friendlyOs = $guestInfoOS
     } else {
-        $friendlyOs = "Unknown"
+        # Fallback to VMware metadata with OS mapping
+        $osLine = Select-String -Path $vmPath -Pattern 'guestOS\s*=\s*".*"' | Select-Object -First 1
+        if ($osLine) {
+            $rawOs = ($osLine.Matches[0].Value -split '=')[1].Trim().Trim('"')
+            $friendlyOs = if ($config.OSMap.ContainsKey($rawOs)) { $config.OSMap[$rawOs] } else { $rawOs }
+        } else {
+            $friendlyOs = "Unknown"
+        }
     }
 
     # Folder Size
@@ -433,7 +478,13 @@ function showVmInfoTable {
                 $row += $val.ToString().PadRight($widths[$col]) + " "
             }
         }
-        Write-Host $row
+        
+        # Color based on VM Type
+        if ($vm.VmType -eq "Clone") {
+            Write-Host $row -ForegroundColor Yellow
+        } else {
+            Write-Host $row -ForegroundColor Green
+        }
         $rowNum++
     }
 }
@@ -516,13 +567,14 @@ function showVmHierarchyPretty {
             $left +
             $pad +
             $vm.OS.PadRight($osWidth) +
-            $vm.Size.PadRight($sizeWidth) +
+            $vm.Size.PadLeft($sizeWidth) + 
+            " " +
             $vm.Created 
 
         if ($depthMap[$name] -eq 0) {
-            Write-Host $line -ForegroundColor Yellow
+            Write-Host $line -ForegroundColor Green
         } else {
-            Write-Host $line -ForegroundColor White
+            Write-Host $line -ForegroundColor Yellow
         }
 
         foreach ($child in $children[$name]) {
@@ -567,10 +619,47 @@ function init {
     $debugMode = $false
 
     # OS mapping (expand as needed)
-    $osMap = @{
-        "windows9-64"  = "Windows 10 x64"
-        "windows10-64" = "Windows 11 x64"
-    }
+	$osMap = @{
+		# ---- Windows Desktop ----
+		"windows7-64"           = "Windows 7 x64"
+		"windows8-64"           = "Windows 8 / 8.1 x64"
+		"windows9-64"           = "Windows 10 x64"
+		"windows10-64"          = "Windows 11 x64"
+		"win11-64"              = "Windows 11 x64"
+
+		# ---- Windows Server ----
+		"windows9srv-64"        = "Windows Server 2016 x64"
+		"windows2019srv-64"     = "Windows Server 2019 x64"
+		"windows2019srvnext-64" = "Windows Server 2022 x64"
+		"windows10srv-64"       = "Windows Server 2022 x64"
+		"windows2025srv-64"     = "Windows Server 2025 x64"
+		"windows2008srv-64"     = "Windows Server 2008 R2 x64"
+		"windows2003srv-64"     = "Windows Server 2003 x64"
+
+		# ---- Linux ----
+		"ubuntu-64"             = "Ubuntu 64-bit"
+		"ubuntu22-64"           = "Ubuntu 22.04+ 64-bit"
+		"debian-64"             = "Debian 64-bit"
+		"rhel7-64"              = "RHEL 7 x64"
+		"rhel8-64"              = "RHEL 8 x64"
+		"centos-64"             = "CentOS 64-bit"
+		"sles12-64"             = "SUSE Linux Enterprise 12 x64"
+		"sles15-64"             = "SUSE Linux Enterprise 15 x64"
+		"rocky-64"              = "Rocky Linux 64-bit"
+		"alma-64"               = "AlmaLinux 64-bit"
+		"genericlinux-64"       = "Generic Linux 64-bit"
+
+		# ---- macOS ----
+		"darwin-64"             = "macOS (64-bit)"
+		"darwin21-64"           = "macOS Monterey"
+		"darwin22-64"           = "macOS Ventura"
+
+		# ---- Catch-all ----
+		"other-64"              = "Other 64-bit OS"
+		"otherlinux-64"         = "Other Linux 64-bit"
+		"Unknown"               = "Unknown OS"
+	}
+
 
     return [PSCustomObject]@{
         ScriptPath       = $scriptPath
@@ -643,7 +732,10 @@ function showAppInfo {
 # ==========================================================
 function main {
     # Initialize Configuration
-    $config = init(180)
+    # The required console width is set to 245 characters for optimal display
+    # Adjust as needed based on your environment
+    # See the checkConsoleWidth() function
+    $config = init(245)
 
     # Display Application Info
     showAppInfo($config)

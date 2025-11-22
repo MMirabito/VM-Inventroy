@@ -27,9 +27,12 @@ The script provides multiple views of your VM inventory:
 
 ### Summary Information
 ```
-Total VMs        : 15
-Total Snapshots  : 23
-Total Size       : 245.67 GB  (251,567.89 MB)
+Total VMs        : 29
+Total Standalone : 14
+Total Clones     : 15
+Total Snapshots  : 12
+Total Size       : 1.63 TB  (1,672.18 GB)
+
 ```
 
 ### Detailed Table View
@@ -37,9 +40,14 @@ Lists all VMs with columns for Name, Type, Parent, Snapshots, Path, OS, Size, an
 
 ### Hierarchical Tree View
 ```
-+-- Windows10-Base          Windows 10 x64    45.23 GB    2024-06-15 14:30:22
-|   |-- Dev-Clone1          Windows 10 x64    12.45 GB    2024-08-20 09:15:33
-|   |-- Test-Clone2         Windows 10 x64    8.92 GB     2024-09-01 16:42:10
++-- Windows 10 x64 21H1       Windows 10 x64           67.76 GB     2021-06-12 09:19:16
+|   |-- Python                Windows 10 x64           96.52 GB     2021-11-03 17:23:42
++-- Windows 10 x64 21H2       Windows 10 x64           140.67 GB    2021-11-25 08:25:05
+|   |-- Apache Spark          Windows 10 x64           31.51 GB     2022-09-02 16:29:11
+|   |-- Azure-Databrick       Windows 10 x64           36.68 GB     2022-09-09 06:58:30
+|   |-- Databricks            Windows 10 x64           7.90 GB      2022-08-24 19:51:18
+|   |-- MadMax                Windows 10 x64           157.27 GB    2021-12-27 07:47:28
+
 ```
 
 ## 🚀 Getting Started
