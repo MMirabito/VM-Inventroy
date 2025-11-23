@@ -4,9 +4,9 @@
     "description": "VMware Workstation VM inventory CLI tool",
     "author": "Massimo Max Mirabito",
     "githubHandle": "@MMirabito",
-    "version": "v1.0.8"
+    "version": "v1.0.9"
   },
-  
+
   "build": {
     "counter": 20,
     "lastUpdated": "2025-11-23T15:52:14Z"
