@@ -59,6 +59,13 @@ Lists all VMs with columns for Name, Type, Parent, Snapshots, Path, OS, Size, an
 - **VMware Workstation**: Installed and configured on your system
 - **Administrator Rights**: Recommended for full registry access
 
+### Development Dependencies (Optional)
+
+If you plan to contribute to this project or use the automated versioning features:
+
+- **Git**: For version control and accessing the pre-commit hook functionality
+- **jq**: JSON processor required for the pre-commit hook (install with `winget install jqlang.jq`)
+
 ### Installation
 
 1. **Clone or Download** this repository:
@@ -108,11 +115,46 @@ The script auto-detects your VMware environment by:
 
 ```
 VM-Inventroy/
-├── VM-Inventory.ps1    # Main PowerShell script
-├── run.cmd             # Batch launcher for easy execution
-├── LICENSE             # Apache 2.0 License
-└── README.md           # This file
+├── VM-Inventory.ps1         # Main PowerShell script
+├── run.cmd                  # Batch launcher for easy execution
+├── app-info.json           # Application metadata and build tracking
+├── .git/hooks/pre-commit   # Automated build counter increment hook
+├── LICENSE                 # Apache 2.0 License
+└── README.md               # This file
 ```
+
+## 🔧 Development Features
+
+### Automated Build Versioning
+
+This project includes a Git pre-commit hook that automatically increments the build counter in `app-info.json` with each commit. This provides automatic version tracking for development builds.
+
+**How it works:**
+- Before each commit, the hook reads the current build counter from `app-info.json`
+- Increments the counter by 1
+- Updates the timestamp to current UTC time
+- Stages the updated file for the commit
+
+**Dependencies:**
+- **jq**: JSON command-line processor
+  ```bash
+  # Install on Windows
+  winget install jqlang.jq
+  
+  # Install on Linux/macOS
+  sudo apt install jq    # Ubuntu/Debian
+  brew install jq        # macOS
+  ```
+
+**Manual Setup** (if needed):
+```bash
+# Make the hook executable (Linux/macOS)
+chmod +x .git/hooks/pre-commit
+
+# On Windows, Git Bash handles execution automatically
+```
+
+The hook will automatically skip if `jq` is not available, allowing commits to continue without interruption.
 
 ## 🔍 How It Works
 
