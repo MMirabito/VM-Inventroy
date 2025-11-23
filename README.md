@@ -255,13 +255,14 @@ This script is provided "as-is" without any warranties. The author is not respon
 
 This tool is read-only and does not modify any VM files or configurations. It only scans and reports information.
 
-## 👤 Author
+## 👤 Authors
 
-**Massimo Max Mirabito**
+- Developer: **Massimo Max Mirabito** GitHub: [@MMirabito](https://github.com/MMirabito)
+- AI Assistant: **GitHub Copilot**
 
 ## 🙏 Acknowledgments
 
-Portions of this script were developed with the assistance of AI technology to accelerate development, improve code clarity, and reduce manual effort. All final logic, testing, and validation were performed by a human operator.
+Portions of this script were developed with the assistance of AI technology to accelerate development, improve code clarity, and reduce manual effort. All final logic, testing, and validation were performed by a human developer.
 
 ## 📮 Support
 
