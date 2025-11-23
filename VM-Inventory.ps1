@@ -79,6 +79,115 @@ function getOSFromGuestInfo {
 }
 
 # ==========================================================
+# Helper: Debug Logging with Formal Format
+# ==========================================================
+function debug {
+    param(
+        [string]$MethodName,
+        [string]$Message,
+        [object]$Data = $null
+    )
+    
+    # Get call stack information
+    $callStack = Get-PSCallStack
+    $caller = $callStack[1] # The function that called debug
+    $lineNumber = $caller.ScriptLineNumber
+    $callingFunction = $caller.FunctionName
+    
+    # If no function name, use the method name parameter
+    if (-not $callingFunction -or $callingFunction -eq '<ScriptBlock>') {
+        $callingFunction = $MethodName
+    }
+    
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $paddedMethodName = $callingFunction.PadLeft(15)
+    $paddedLineNumber = $lineNumber.ToString().PadLeft(4)
+    Write-Host "[$timestamp] [DEBUG] [${paddedMethodName}:(${paddedLineNumber})] $Message" -ForegroundColor White
+    
+    if ($Data) {
+        if ($Data -is [string]) {
+            Write-Host $Data -ForegroundColor White
+        } 
+        else {
+            # Create compact JSON with 2-space indentation and debug header for each line
+            $jsonLines = ($Data | ConvertTo-Json -Depth 2) -split "`n"
+            foreach ($line in $jsonLines) {
+                $trimmedLine = $line.TrimStart()
+                $indentLevel = ($line.Length - $trimmedLine.Length) / 4
+                $newIndent = "  " * $indentLevel
+                $formattedLine = $newIndent + $trimmedLine
+                
+                # Display debug header with each JSON line
+                Write-Host "[$timestamp] [DEBUG] [${paddedMethodName}:(${paddedLineNumber})] $formattedLine" -ForegroundColor White
+            }
+        }
+    }
+}
+
+# ==========================================================
+# Helper: Read App Info from JSON
+# ==========================================================
+function getAppInfo {
+    param([string]$scriptDir)
+    
+    $appInfoPath = Join-Path $scriptDir "app-info.json"
+    
+    try {
+        if (Test-Path $appInfoPath) {
+            $appInfo = Get-Content $appInfoPath -Raw | ConvertFrom-Json
+            
+            # Debug mode: Display JSON content
+            if ($appInfo.display.debugMode) {
+                debug -MethodName "getAppInfo" -Message "JSON Configuration Loaded:" -Data $appInfo
+            }
+            
+            return [PSCustomObject]@{
+                Name         = $appInfo.app.name
+                Description  = $appInfo.app.description
+                Author       = $appInfo.app.author
+                Email        = $appInfo.app.email
+                Version      = $appInfo.app.version
+                BuildCounter = $appInfo.build.counter
+                LastUpdated  = $appInfo.build.lastUpdated
+                
+                # Display settings
+                ShowSummary  = $appInfo.display.showSummary
+                ShowHierarchy = $appInfo.display.showHierarchy
+                DebugMode    = $appInfo.display.debugMode
+
+                Available    = $true
+            }
+        } 
+        else {
+            [Console]::Beep()
+            Write-Host "WARNING: app-info.json not found at: $appInfoPath" -ForegroundColor Red
+
+        }
+    } 
+    catch {
+        Write-Warning "Failed to read app-info.json: $_"
+    }   
+    
+    # Fallback to hardcoded values
+    return [PSCustomObject]@{
+        Name        = "VM-Inventory"
+        Description = "VMware Workstation VM inventory tool"
+        Author      = "Massimo Max Mirabito"
+        Email       = "N/A"
+        Version     = "v0.0.0"
+        BuildCounter = 0
+        LastUpdated = "N/A"
+        
+        # Default display settings
+        ShowSummary = $true
+        ShowHierarchy = $true
+        DebugMode   = $false
+
+        Available   = $false
+    }
+}
+
+# ==========================================================
 # Helper: Reliable Script Path Detection
 # ==========================================================
 function getScriptPath {
@@ -106,7 +215,8 @@ function getGitCommitSha {
                 }
             }
         }
-    } catch {
+    } 
+    catch {
         # Git not available or not a git repository
     }
     
@@ -253,7 +363,8 @@ function showVmwareEnvironment {
     if ($config.vmInstalledInfo) {
         Write-Host "VMware Installed : $($config.vmInstalledInfo.Name)" -ForegroundColor Cyan
         Write-Host "Version          : $($config.vmInstalledInfo.Version)" -ForegroundColor Cyan
-    } else {
+    } 
+    else {
         Write-Host "VMware Workstation is NOT installed." -ForegroundColor Red
     }
 }
@@ -277,20 +388,41 @@ function getVmInfo {
     $vmPath = $vmx.FullName
     $vmDir  = $vmx.DirectoryName
 
+    if ($config.DebugMode) {
+        debug -MethodName "getVmInfo" -Message "Processing VM: $($vmx.BaseName)" -Data @{
+            VmxPath = $vmPath
+            VmDir = $vmDir
+        }
+    }
+
     # Guest OS - Try VMware Tools data first, fallback to metadata
     $guestInfoOS = getOSFromGuestInfo -vmxPath $vmPath
     
     if ($guestInfoOS) {
         # Use accurate OS from VMware Tools
         $friendlyOs = $guestInfoOS
-    } else {
+        if ($config.DebugMode) {
+            debug -MethodName "getVmInfo" -Message "OS detected from VMware Tools: $friendlyOs"
+        }
+    } 
+    else {
         # Fallback to VMware metadata with OS mapping
         $osLine = Select-String -Path $vmPath -Pattern 'guestOS\s*=\s*".*"' | Select-Object -First 1
         if ($osLine) {
             $rawOs = ($osLine.Matches[0].Value -split '=')[1].Trim().Trim('"')
             $friendlyOs = if ($config.OSMap.ContainsKey($rawOs)) { $config.OSMap[$rawOs] } else { $rawOs }
-        } else {
+            if ($config.DebugMode) {
+                debug -MethodName "getVmInfo" -Message "OS detected from metadata" -Data @{
+                    RawOS = $rawOs
+                    MappedOS = $friendlyOs
+                }
+            }
+        } 
+        else {
             $friendlyOs = "Unknown"
+            if ($config.DebugMode) {
+                debug -MethodName "getVmInfo" -Message "OS detection failed - using Unknown"
+            }
         }
     }
 
@@ -303,8 +435,16 @@ function getVmInfo {
     $sizeBytes = $bytes
     if ($bytes -lt 1GB) {
         $size = ("{0:N2} MB" -f ($bytes / 1MB))
-    } else {
+    } 
+    else {
         $size = ("{0:N2} GB" -f ($bytes / 1GB))
+    }
+
+    if ($config.DebugMode) {
+        debug -MethodName "getVmInfo" -Message "Size calculated" -Data @{
+            SizeBytes = $sizeBytes
+            SizeFormatted = $size
+        }
     }
 
     # Created date
@@ -322,6 +462,13 @@ function getVmInfo {
     $clone = 0
 
     if ($descriptorFile -and $descriptorFile.Length -gt 0) {
+        if ($config.DebugMode) {
+            debug -MethodName "getVmInfo" -Message "Analyzing disk descriptor" -Data @{
+                DescriptorFile = $descriptorFile.Name
+                FileSize = $descriptorFile.Length
+            }
+        }
+
         $descLines = Get-Content -LiteralPath $descriptorFile.FullName -TotalCount 50 -ErrorAction SilentlyContinue
         $joined = $descLines -join "`n"
 
@@ -331,7 +478,8 @@ function getVmInfo {
 
             if ([System.IO.Path]::IsPathRooted($parentRel)) {
                 $parentPath = $parentRel
-            } else {
+            } 
+            else {
                 $parentPath = Join-Path $vmDir $parentRel
             }
 
@@ -342,7 +490,25 @@ function getVmInfo {
                 $parentVmName = Split-Path $parentDir -Leaf
                 $standalone = 0
                 $clone = 1
+
+                if ($config.DebugMode) {
+                    debug -MethodName "getVmInfo" -Message "Clone detected" -Data @{
+                        ParentVM = $parentVmName
+                        ParentDisk = $parentDisk
+                        ParentPath = $parentPath
+                    }
+                }
             }
+        } 
+        else {
+            if ($config.DebugMode) {
+                debug -MethodName "getVmInfo" -Message "No parent hint found - Standalone VM"
+            }
+        }
+    } 
+    else {
+        if ($config.DebugMode) {
+            debug -MethodName "getVmInfo" -Message "No valid descriptor file found"
         }
     }
 
@@ -355,7 +521,15 @@ function getVmInfo {
         # Count unique snapshots in .vmsd file (most accurate method)
         $vmsdContent = Get-Content -Path $vmsdPath -ErrorAction SilentlyContinue
         $snapshotCount = ($vmsdContent | Where-Object { $_ -match '^snapshot[0-9]+\.uid' }).Count
-    } else {
+        
+        if ($config.DebugMode) {
+            debug -MethodName "getVmInfo" -Message "Snapshots counted from .vmsd file" -Data @{
+                VmsdPath = $vmsdPath
+                SnapshotCount = $snapshotCount
+            }
+        }
+    } 
+    else {
         # Fallback: Look for snapshot-specific delta files (exclude clone deltas)
         # Only count if this is NOT a clone VM (clones have delta files but aren't snapshots)
         if ($vmType -eq "Standalone") {
@@ -363,6 +537,28 @@ function getVmInfo {
                 $_ -match '-[0-9]{6}\.vmdk$' -and $_ -notmatch 'flat\.vmdk$'
             }
             $snapshotCount = $deltaFiles.Count
+            
+            if ($config.DebugMode) {
+                debug -MethodName "getVmInfo" -Message "Snapshots counted from delta files (fallback)" -Data @{
+                    DeltaFilesFound = $deltaFiles.Count
+                    SnapshotCount = $snapshotCount
+                }
+            }
+        } 
+        else {
+            if ($config.DebugMode) {
+                debug -MethodName "getVmInfo" -Message "Skipping delta file count - VM is a clone"
+            }
+        }
+    }
+
+    if ($config.DebugMode) {
+        debug -MethodName "getVmInfo" -Message "VM processing completed" -Data @{
+            VMName = $vmx.BaseName
+            VMType = $vmType
+            FinalOS = $friendlyOs
+            FinalSize = $size
+            SnapshotCount = $snapshotCount
         }
     }
 
@@ -407,7 +603,7 @@ function showVMInfo {
     Write-Host " "
     Write-Host "Total VMs        : $totalVms" -ForegroundColor Green
     Write-Host "Total Standalone : $totalStandalone" -ForegroundColor Green
-    Write-Host "Total Clones     : $totalClones" -ForegroundColor Green
+    Write-Host "Total Clones     : $totalClones" -ForegroundColor Yellow
     Write-Host "Total Snapshots  : $totalSnapshots" -ForegroundColor Green
     
     # Display size with appropriate unit
@@ -482,7 +678,8 @@ function showVmInfoTable {
         # Color based on VM Type
         if ($vm.VmType -eq "Clone") {
             Write-Host $row -ForegroundColor Yellow
-        } else {
+        } 
+        else {
             Write-Host $row -ForegroundColor Green
         }
         $rowNum++
@@ -526,7 +723,8 @@ function showVmHierarchyPretty {
         $level = $depthMap[$vm.Name]
         if ($level -eq 0) {
             $prefix = "+-- "
-        } else {
+        } 
+        else {
             $prefix = ("|   " * $level) + "|-- "
         }
 
@@ -563,18 +761,38 @@ function showVmHierarchyPretty {
         if ($padSpaces -lt 1) { $padSpaces = 1 }
         $pad = " " * $padSpaces
 
-        $line =
-            $left +
-            $pad +
-            $vm.OS.PadRight($osWidth) +
-            $vm.Size.PadLeft($sizeWidth) + 
-            " " +
-            $vm.Created 
-
         if ($depthMap[$name] -eq 0) {
+            # Standalone VM - everything in green
+            $line =
+                $left +
+                $pad +
+                $vm.OS.PadRight($osWidth) +
+                $vm.Size.PadLeft($sizeWidth) + 
+                " " +
+                $vm.Created 
             Write-Host $line -ForegroundColor Green
-        } else {
-            Write-Host $line -ForegroundColor Yellow
+        } 
+        else {
+            # Clone VM - tree structure in green, content in yellow
+            $treeStructure = $left -replace '^(\|[\s\-\|]*)', '$1'
+            $vmName = $vm.Name
+            $restOfLine = $vm.OS.PadRight($osWidth) + $vm.Size.PadLeft($sizeWidth) + " " + $vm.Created
+            
+            # Extract just the tree characters (|, -, spaces)
+            if ($left -match '^([\|\s\-]+)(.*)$') {
+                $treeChars = $matches[1]
+                $nameOnly = $matches[2]
+                
+                Write-Host $treeChars -ForegroundColor Green -NoNewline
+                Write-Host $nameOnly -ForegroundColor Yellow -NoNewline
+                Write-Host $pad -NoNewline
+                Write-Host $restOfLine -ForegroundColor Yellow
+            } else {
+                # Fallback if regex fails
+                Write-Host $left -ForegroundColor Yellow -NoNewline
+                Write-Host $pad -NoNewline
+                Write-Host $restOfLine -ForegroundColor Yellow
+            }
         }
 
         foreach ($child in $children[$name]) {
@@ -593,7 +811,7 @@ function showVmHierarchyPretty {
 # Initialization
 # ==========================================================
 function init {
-    param([int]$requiredWidth = 180)
+    param([int]$requiredWidth = 245)
     Clear-Host
 
     checkConsoleWidth($requiredWidth)
@@ -616,16 +834,17 @@ function init {
     $scriptPath    = getScriptPath
     $defaultVmPath = getVmwareDefaultVmPath
     $gitSha        = getGitCommitSha
-
-    $scriptVersion = "v1.0.3"
+    $root          = Split-Path -Parent $scriptPath
+    
+    # Load the app-info.json configuration
+    $appInfo       = getAppInfo -scriptDir $root    
+    
     $scriptName    = Split-Path -Leaf $scriptPath
-    $scriptDate    = (Get-Item $scriptPath).LastWriteTime.ToString("yyyy-MM-dd")
+    $report        = Join-Path $root "VM_Clone_Map.txt"
 
-    $root   = Split-Path -Parent $scriptPath
-    $report = Join-Path $root "VM_Clone_Map.txt"
-
-    $showSummaryTable = $true
-    $debugMode = $false
+    # Use display settings from JSON, with fallback defaults
+    $showSummaryTable = $appInfo.ShowSummary
+    $debugMode = $appInfo.DebugMode
 
     # OS mapping (expand as needed)
 	$osMap = @{
@@ -672,14 +891,13 @@ function init {
 
     return [PSCustomObject]@{
         ScriptPath       = $scriptPath
-        ScriptVersion    = $scriptVersion
         ScriptName       = $scriptName
-        ScriptDate       = $scriptDate
         Root             = $root
         Report           = $report
         ShowSummaryTable = $showSummaryTable
         DebugMode        = $debugMode
         GitSha           = $gitSha
+        AppInfo          = $appInfo
 
         vmDesktopCore     = getVmwareRegByKey "Core"
         vmProductVersion  = getVmwareRegByKey "ProductVersion"
@@ -708,24 +926,47 @@ function showAppInfo {
 
     $currentWidth = $Host.UI.RawUI.WindowSize.Width
 
-    Write-Host "=======================================================================" -ForegroundColor Yellow
+    Write-Host "============================================================================================"  -ForegroundColor Yellow
     
     # Build banner with different colors for each component
-    # Write-Host " " -NoNewline
-    Write-Host "$($config.ScriptName)" -ForegroundColor White -NoNewline
+    Write-Host "$($config.AppInfo.Name)" -ForegroundColor Green -NoNewline
     Write-Host " | Version: " -ForegroundColor Yellow -NoNewline
-    Write-Host "$($config.ScriptVersion)" -ForegroundColor Green -NoNewline
+    Write-Host "$($config.AppInfo.Version)" -ForegroundColor Green -NoNewline
+    Write-Host " | Build: " -ForegroundColor Yellow -NoNewline
+    Write-Host $("{0:000}" -f $config.AppInfo.BuildCounter) -ForegroundColor Green -NoNewline
     Write-Host " | SHA-1: " -ForegroundColor Yellow -NoNewline
     
     if ($config.GitSha.Available) {
         Write-Host "$($config.GitSha.Short)" -ForegroundColor Green -NoNewline
-    } else {
+    } 
+    else {
         Write-Host "N/A" -ForegroundColor Green -NoNewline
     }
     
     Write-Host " | Date: " -ForegroundColor Yellow -NoNewline
-    Write-Host "$($config.ScriptDate)" -ForegroundColor Green
-    Write-Host "=======================================================================" -ForegroundColor Yellow
+    # Convert UTC timestamp to local time with timezone
+    $localTime = try { 
+        $convertedTime = [DateTime]::Parse($config.AppInfo.LastUpdated).ToLocalTime()
+        $tzName = [TimeZoneInfo]::Local.StandardName
+        # Create proper timezone abbreviations
+        $timezone = switch -Regex ($tzName) {
+            "Eastern"   { if ([TimeZoneInfo]::Local.IsDaylightSavingTime($convertedTime)) { "EDT" } else { "EST" } }
+            "Central"   { if ([TimeZoneInfo]::Local.IsDaylightSavingTime($convertedTime)) { "CDT" } else { "CST" } }
+            "Mountain"  { if ([TimeZoneInfo]::Local.IsDaylightSavingTime($convertedTime)) { "MDT" } else { "MST" } }
+            "Pacific"   { if ([TimeZoneInfo]::Local.IsDaylightSavingTime($convertedTime)) { "PDT" } else { "PST" } }
+            "Atlantic"  { if ([TimeZoneInfo]::Local.IsDaylightSavingTime($convertedTime)) { "ADT" } else { "AST" } }
+            default     { ($tzName -replace ' Time| Standard| Daylight').Substring(0, [Math]::Min(3, ($tzName -replace ' Time| Standard| Daylight').Length)) }
+        }
+        $convertedTime.ToString("yyyy-MM-dd HH:mm:ss") + " $timezone"
+    } catch { 
+        $config.AppInfo.LastUpdated 
+    }
+    Write-Host "$localTime" -ForegroundColor Green
+    Write-Host "============================================================================================"  -ForegroundColor Yellow
+    
+    Write-Host "Description      : $($config.AppInfo.Description)" -ForegroundColor Cyan
+    Write-Host "Author           : $($config.AppInfo.Author)" -ForegroundColor Cyan
+    Write-Host "Email            : $($config.AppInfo.Email)" -ForegroundColor Cyan
     write-Host ""
     Write-Host "Console Width    : $currentWidth" -ForegroundColor Yellow
     Write-Host "Script Location  : $($config.Root)" -ForegroundColor Yellow
@@ -782,7 +1023,11 @@ function main {
     }
     
     # Display Pretty Hierarchy
-    showVmHierarchyPretty $vmDetails
+    if ($config.AppInfo.ShowHierarchy) {
+        showVmHierarchyPretty $vmDetails
+    }
+
+    Write-Host ""
 }
 
 # ==========================================================
