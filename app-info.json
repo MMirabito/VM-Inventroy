@@ -6,18 +6,15 @@
     "githubHandle": "@MMirabito",
     "version": "v1.0.10"
   },
-
   "build": {
-    "counter": 20,
-    "lastUpdated": "2025-11-23T15:52:14Z"
+    "counter": 22,
+    "lastUpdated": "2025-11-23T18:37:42Z"
   },
-
   "display": {
     "showSummary": true,
     "showHierarchy": true,
     "debugMode": false
   },
-
   "logging": {
     "enableFileLogging": true,
     "logLevel": "INFO",
