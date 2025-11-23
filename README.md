@@ -21,34 +21,73 @@ VM-Inventory is a comprehensive PowerShell script designed for VMware Workstatio
 - **Summary Statistics**: Total VM count, snapshot count, and aggregate disk usage
 - **Friendly OS Names**: Translates VMware guest OS codes to readable names
 
+## 📚 Documentation
+
+- **[Architecture Documentation](ARCHITECTURE.md)** - Technical deep-dive into how the code works, with visual diagrams and function explanations
+
 ## 📊 Sample Output
 
 The script provides multiple views of your VM inventory:
 
-### Summary Information
+### 1. Application Header
+```
+============================================================================================
+VM-Inventory | Version: v1.0.3 | Build: 012 | SHA-1: a1b2c3d | Date: 2025-01-23 14:30:15 EST
+============================================================================================
+Description      : VMware Workstation inventory tool that scans and analyzes virtual machine environments
+Author           : Massimo Max Mirabito
+Email            : user@example.com
+
+Console Width    : 180
+Script Location  : D:\MyProjects\VM-Inventroy
+Running From     : D:\MyProjects\VM-Inventroy
+User Name        : SysAdmin
+Machine Name     : DESKTOP-ABC123
+```
+
+### 2. VMware Environment
+```
+VMware Desktop   : VMware Workstation Pro
+VMware Version   : 17.0.2
+Install Path     : C:\Program Files (x86)\VMware\VMware Workstation
+Default VM Path  : D:\VMs
+Windows Services : VMware Authorization Service (Running)
+                   VMware DHCP Service (Running)
+                   VMware NAT Service (Running)
+```
+
+### 3. Summary Information
 ```
 Total VMs        : 29
 Total Standalone : 14
 Total Clones     : 15
 Total Snapshots  : 12
 Total Size       : 1.63 TB  (1,672.18 GB)
-
 ```
 
-### Detailed Table View
-Lists all VMs with columns for Name, Type, Parent, Snapshots, Path, OS, Size, and Creation Date
-
-### Hierarchical Tree View
+### 4. Detailed Table View
 ```
-+-- Windows 10 x64 21H1       Windows 10 x64           67.76 GB     2021-06-12 09:19:16
-|   |-- Python                Windows 10 x64           96.52 GB     2021-11-03 17:23:42
-+-- Windows 10 x64 21H2       Windows 10 x64           140.67 GB    2021-11-25 08:25:05
-|   |-- Apache Spark          Windows 10 x64           31.51 GB     2022-09-02 16:29:11
-|   |-- Azure-Databrick       Windows 10 x64           36.68 GB     2022-09-09 06:58:30
-|   |-- Databricks            Windows 10 x64           7.90 GB      2022-08-24 19:51:18
-|   |-- MadMax                Windows 10 x64           157.27 GB    2021-12-27 07:47:28
+# Name                    VmType     Parent           SnapshotCount Path                              OS                    Size      Created             
+- ----------------------- ---------- ---------------- ------------- --------------------------------- --------------------- --------- --------------------
+1 Windows-10-Base         Standalone                  2             D:\VMs\Windows-10-Base           Windows 10 x64        67.76 GB  2021-06-12 09:19:16
+2 Ubuntu-20.04-LTS        Standalone                  0             D:\VMs\Ubuntu-20.04-LTS          Ubuntu 20.04.3 LTS    12.34 GB  2021-08-15 10:30:22
 
+3 Development-Clone       Clone      Windows-10-Base  1             D:\VMs\Development-Clone          Windows 10 x64        96.52 GB  2021-11-03 17:23:42
+4 Testing-Environment     Clone      Windows-10-Base  0             D:\VMs\Testing-Environment        Windows 10 x64        45.18 GB  2022-01-15 09:45:30
 ```
+*Note: Standalone VMs display in green, clones in yellow, and snapshot counts in cyan*
+
+### 5. Hierarchical Tree View
+```
+Virtual Machine Hierarchy:
++-- Windows-10-Base              Windows 10 x64           67.76 GB     2021-06-12 09:19:16
+|   |── Development-Clone        Windows 10 x64           96.52 GB     2021-11-03 17:23:42
+|   |── Testing-Environment      Windows 10 x64           45.18 GB     2022-01-15 09:45:30
++-- Ubuntu-20.04-LTS             Ubuntu 20.04.3 LTS      12.34 GB     2021-08-15 10:30:22
++-- Windows-Server-2019          Windows Server 2019      89.45 GB     2021-09-10 14:20:15
+|   |── Domain-Controller        Windows Server 2019      125.67 GB    2021-10-05 11:15:45
+```
+*Note: Green for standalone VMs and tree structure, yellow for clone VM names*
 
 ## 🚀 Getting Started
 
