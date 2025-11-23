@@ -19,6 +19,41 @@ Automatically increments the build counter in `app-info.json` with each commit a
   - macOS: `brew install jq`
   - Linux: `sudo apt install jq` or `sudo yum install jq`
 
+## Quick Setup (Windows)
+
+Complete setup on a new machine:
+
+1. **Install jq** (if not already installed):
+   ```powershell
+   winget install jqlang.jq
+   ```
+
+2. **Refresh your terminal PATH** (choose one):
+   - **Option A**: Close and reopen your terminal
+   - **Option B**: Run this command to refresh the current session:
+     ```powershell
+     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+     ```
+
+3. **Verify jq is available**:
+   ```powershell
+   jq --version
+   # Should output: jq-1.8.1 (or similar)
+   ```
+
+4. **Install the hook**:
+   ```powershell
+   Copy-Item .\scripts\pre-commit .git\hooks\pre-commit
+   ```
+
+5. **Test it works**:
+   ```powershell
+   # Make any change and commit
+   git add .
+   git commit -m "Test pre-commit hook"
+   # Should see: Build counter incremented: X → Y
+   ```
+
 ## Installation
 
 ### Option 1: Manual Copy
