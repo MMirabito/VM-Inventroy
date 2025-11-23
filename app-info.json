@@ -4,11 +4,11 @@
     "description": "VMware Workstation VM inventory CLI tool",
     "author": "Massimo Max Mirabito",
     "githubHandle": "@MMirabito",
-    "version": "v1.0.17"
+    "version": "v1.1.0"
   },
   "build": {
-    "counter": 24,
-    "lastUpdated": "2025-11-23T22:03:58Z"
+    "counter": 29,
+    "lastUpdated": "2025-11-23T22:24:18Z"
   },
   "display": {
     "showSummary": true,

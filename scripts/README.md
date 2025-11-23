@@ -21,7 +21,26 @@ Automatically increments the build counter in `app-info.json` with each commit a
 
 ## Quick Setup (Windows)
 
-Complete setup on a new machine:
+**Automated Setup (Recommended):**
+
+Just run the setup script - it does everything automatically:
+
+```powershell
+.\scripts\setup-hooks.ps1
+```
+
+Or double-click: `scripts\setup-hooks.cmd`
+
+The script will:
+- Check for jq and install it if needed
+- Copy the pre-commit hook to .git/hooks/
+- Configure VS Code settings
+- Test the hook with a real commit
+- Give you clear next steps
+
+**Manual Setup (Alternative):**
+
+If you prefer to do it manually, follow these steps:
 
 1. **Install jq** (if not already installed):
    ```powershell
@@ -46,7 +65,13 @@ Complete setup on a new machine:
    Copy-Item .\scripts\pre-commit .git\hooks\pre-commit
    ```
 
-5. **Test it works**:
+5. **Configure VS Code** (optional):
+   Add to your VS Code settings.json:
+   ```json
+   "git.allowNoVerifyCommit": false
+   ```
+
+6. **Test it works**:
    ```powershell
    # Make any change and commit
    git add .

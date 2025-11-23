@@ -105,6 +105,21 @@ If you plan to contribute to this project or use the automated versioning featur
 - **Git**: For version control and accessing the pre-commit hook functionality
 - **jq**: JSON processor required for the pre-commit hook (install with `winget install jqlang.jq`)
 
+**Quick Setup for Contributors:**
+
+Run the automated setup script to configure Git hooks:
+```powershell
+.\scripts\setup-hooks.ps1
+```
+
+This will automatically:
+- Install jq if needed
+- Configure the pre-commit hook for auto-incrementing build numbers
+- Set up VS Code integration
+- Test that everything works
+
+See [Development Scripts Documentation](scripts/README.md) for more details.
+
 ### Installation
 
 1. **Clone or Download** this repository:
@@ -180,9 +195,8 @@ The hook is completely optional. See **[Development Scripts Guide](scripts/READM
 - Updates the timestamp to current UTC time
 - Stages the updated file for the commit
 
-**Dependencies:**
-- **jq**: JSON command-line processor (install with `winget install jqlang.jq`)
-- The hook gracefully skips if jq is not available
+**Setup:**
+Run `.\scripts\setup-hooks.ps1` to automatically configure everything needed.
 
 **For Contributors:**
 Installing the hook is completely optional. The project works perfectly without it, but it provides automated versioning for those who want it.
