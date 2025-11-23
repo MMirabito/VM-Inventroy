@@ -2,45 +2,29 @@
 ================================================================================
  VM-Inventory
 --------------------------------------------------------------------------------
- Description :
-    Scans VMware Workstation environments and generates a complete inventory of
-    all virtual machines, including size, OS, snapshots, and clone hierarchy.
+ Description:
+    VMware Workstation inventory tool that scans and analyzes virtual
+    machine environments with visual hierarchy displays and intelligent OS detection.
 
- Author       : Massimo Max Mirabito
- Version      : v1.0.3
- Created      : 2025-01-01
+ Author      : Massimo Max Mirabito
+ Version     : v1.0.3
+ Created     : 2025-01-01
+ License     : Apache License 2.0
 
- permission is granted to use, copy, modify, and distribute this script for
-    educational and informational purposes only, provided that the original
-    author is credited.
-
- AI Assistance :
+ AI Assistance:
     Portions of this script were developed with the assistance of AI technology
     to accelerate development, improve code clarity, and reduce manual effort.
     All final logic, testing, and validation were performed by a human operator.
 
-License      : Apache License 2.0
 --------------------------------------------------------------------------------
- Disclaimer   :
-    This script is provided "as-is" without any warranties. The author is not
-    responsible for any damage or data loss that may occur from its use.
-    Use this script at your own risk.
-================================================================================
- Usage :
-    1. Ensure you have PowerShell installed on your Windows machine.
-    2. Save this script as 'vm-inventory.ps1'.
-    3. Open PowerShell as Administrator.
-    4. Navigate to the script directory.
-    5. Run the script: .\vm-inventory.ps1
-    6. Review the output in the console and the generated report file.
+ Usage: .\VM-Inventory.ps1  or  .\run.cmd  |  Requires: PowerShell 5.1+, VMware Workstation
 
- Note        :
-    This script is intended for educational and informational purposes only.
-    Use it at your own risk. The author is not responsible for any damage or
-    data loss that may occur from its use.
-
+ Disclaimer:
+    This script is provided "as-is" without any warranties. Use at your own risk.
 ================================================================================
 #>
+
+
 # ==========================================================
 # Helper: Get Accurate OS from VMware Tools Guest Info
 # ==========================================================
@@ -71,7 +55,8 @@ function getOSFromGuestInfo {
                 return $cleanName
             }
         }
-    } catch {
+    } 
+    catch {
         # Guest info not available or malformed
     }
     
@@ -601,20 +586,20 @@ function showVMInfo {
     $totalKB = $totalBytes / 1KB
 
     Write-Host " "
-    Write-Host "Total VMs        : $totalVms" -ForegroundColor Green
-    Write-Host "Total Standalone : $totalStandalone" -ForegroundColor Green
-    Write-Host "Total Clones     : $totalClones" -ForegroundColor Yellow
-    Write-Host "Total Snapshots  : $totalSnapshots" -ForegroundColor Green
+    Write-Host "Total VMs         : $totalVms" -ForegroundColor Green
+    Write-Host "Total Standalone  : $totalStandalone" -ForegroundColor Green
+    Write-Host "Total Clones      : $totalClones" -ForegroundColor Yellow
+    Write-Host "Total Snapshots   : $totalSnapshots" -ForegroundColor Cyan
     
     # Display size with appropriate unit
     if ($totalBytes -ge 1TB) {
-        Write-Host ("Total Size       : {0:N2} TB  ({1:N2} GB)" -f $totalTB, $totalGB) -ForegroundColor Green
+        Write-Host ("Total Size On Disk: {0:N2} TB  ({1:N2} GB)" -f $totalTB, $totalGB) -ForegroundColor Green
     } 
     elseif ($totalBytes -ge 1GB) {
-        Write-Host ("Total Size       : {0:N2} GB  ({1:N2} MB)" -f $totalGB, $totalMB) -ForegroundColor Green
+        Write-Host ("Total Size On Disk: {0:N2} GB  ({1:N2} MB)" -f $totalGB, $totalMB) -ForegroundColor Green
     } 
     else {
-        Write-Host ("Total Size       : {0:N2} MB  ({1:N2} KB)" -f $totalMB, $totalKB) -ForegroundColor Green
+        Write-Host ("Total Size On Disk: {0:N2} MB  ({1:N2} KB)" -f $totalMB, $totalKB) -ForegroundColor Green
     }
 
 }
@@ -659,7 +644,14 @@ function showVmInfoTable {
 
     # Rows
     $rowNum = 1
+    $previousVmType = ""
     foreach ($vm in $vmInfo) {
+        # Add blank line when VM type group changes and reset counter
+        if ($previousVmType -ne "" -and $previousVmType -ne $vm.VmType) {
+            Write-Host ""
+            $rowNum = 1  # Reset counter for new group
+        }
+        
         $row = ""
         foreach ($col in $columns) {
             if ($col -eq "#") {
@@ -670,18 +662,33 @@ function showVmInfoTable {
             if ($null -eq $val) { $val = "" }
             if ($col -eq "Size") {
                 $row += $val.ToString().PadLeft($widths[$col]) + " "
-            } else {
+            } 
+            else {
                 $row += $val.ToString().PadRight($widths[$col]) + " "
             }
         }
         
-        # Color based on VM Type
-        if ($vm.VmType -eq "Clone") {
-            Write-Host $row -ForegroundColor Yellow
-        } 
-        else {
-            Write-Host $row -ForegroundColor Green
+        # Simple approach: Replace the snapshot count part with colored version
+        $snapshotCountStr = $vm.SnapshotCount.ToString().PadRight($widths['SnapshotCount']) + " "
+        $snapshotStart = $row.IndexOf($snapshotCountStr)
+        
+        if ($snapshotStart -ge 0) {
+            $beforeSnapshot = $row.Substring(0, $snapshotStart)
+            $afterSnapshot = $row.Substring($snapshotStart + $snapshotCountStr.Length)
+            
+            # Output with colors
+            $rowColor = if ($vm.VmType -eq "Clone") { "Yellow" } else { "Green" }
+            Write-Host $beforeSnapshot -ForegroundColor $rowColor -NoNewline
+            Write-Host $snapshotCountStr -ForegroundColor Cyan -NoNewline
+            Write-Host $afterSnapshot -ForegroundColor $rowColor
         }
+        else {
+            # Fallback if string replacement fails
+            $rowColor = if ($vm.VmType -eq "Clone") { "Yellow" } else { "Green" }
+            Write-Host $row -ForegroundColor $rowColor
+        }
+        
+        $previousVmType = $vm.VmType
         $rowNum++
     }
 }
@@ -787,7 +794,8 @@ function showVmHierarchyPretty {
                 Write-Host $nameOnly -ForegroundColor Yellow -NoNewline
                 Write-Host $pad -NoNewline
                 Write-Host $restOfLine -ForegroundColor Yellow
-            } else {
+            } 
+            else {
                 # Fallback if regex fails
                 Write-Host $left -ForegroundColor Yellow -NoNewline
                 Write-Host $pad -NoNewline
@@ -958,7 +966,8 @@ function showAppInfo {
             default     { ($tzName -replace ' Time| Standard| Daylight').Substring(0, [Math]::Min(3, ($tzName -replace ' Time| Standard| Daylight').Length)) }
         }
         $convertedTime.ToString("yyyy-MM-dd HH:mm:ss") + " $timezone"
-    } catch { 
+    } 
+    catch { 
         $config.AppInfo.LastUpdated 
     }
     Write-Host "$localTime" -ForegroundColor Green
