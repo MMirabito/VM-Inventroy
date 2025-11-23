@@ -1,2 +1,5 @@
 # Archive directory - contains backup copies and old versions
 +ARCHIVE/
+
+# Log files directory
+logs/

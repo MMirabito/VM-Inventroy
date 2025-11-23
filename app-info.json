@@ -6,13 +6,21 @@
     "githubHandle": "@MMirabito",
     "version": "v1.0.8"
   },
+  
   "build": {
     "counter": 20,
     "lastUpdated": "2025-11-23T15:52:14Z"
   },
+
   "display": {
     "showSummary": true,
     "showHierarchy": true,
     "debugMode": false
+  },
+
+  "logging": {
+    "enableFileLogging": true,
+    "logLevel": "INFO",
+    "logFilePath": ".\\logs\\VM-Inventory_{timestamp}.log"
   }
 }
