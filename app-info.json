@@ -4,11 +4,11 @@
     "description": "VMware Workstation VM inventory tool",
     "author": "Massimo Max Mirabito",
     "email": "MMirabito@gmail.com",
-    "version": "v1.0.6"
+    "version": "v1.0.7"
   },
   "build": {
-    "counter": 13,
-    "lastUpdated": "2025-11-23T14:15:29Z"
+    "counter": 14,
+    "lastUpdated": "2025-11-23T14:26:17Z"
   },
   "display": {
     "showSummary": true,
