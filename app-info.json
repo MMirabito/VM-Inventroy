@@ -1,14 +1,14 @@
 {
   "app": {
     "name": "VM-Inventory",
-    "description": "VMware Workstation VM inventory tool",
+    "description": "VMware Workstation VM inventory CLI tool",
     "author": "Massimo Max Mirabito",
     "email": "MMirabito@gmail.com",
-    "version": "v1.0.7"
+    "version": "v1.0.8"
   },
   "build": {
-    "counter": 14,
-    "lastUpdated": "2025-11-23T14:26:17Z"
+    "counter": 15,
+    "lastUpdated": "2025-11-23T14:27:08Z"
   },
   "display": {
     "showSummary": true,
