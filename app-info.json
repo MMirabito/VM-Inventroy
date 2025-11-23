@@ -3,12 +3,12 @@
     "name": "VM-Inventory",
     "description": "VMware Workstation VM inventory CLI tool",
     "author": "Massimo Max Mirabito",
-    "email": "MMirabito@gmail.com",
+    "githubHandle": "@MMirabito",
     "version": "v1.0.8"
   },
   "build": {
-    "counter": 18,
-    "lastUpdated": "2025-11-23T15:17:02Z"
+    "counter": 19,
+    "lastUpdated": "2025-11-23T15:42:00Z"
   },
   "display": {
     "showSummary": true,

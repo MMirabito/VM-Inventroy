@@ -24,6 +24,7 @@ VM-Inventory is a comprehensive PowerShell script designed for VMware Workstatio
 ## 📚 Documentation
 
 - **[Architecture Documentation](ARCHITECTURE.md)** - Technical deep-dive into how the code works, with visual diagrams and function explanations
+- **[Development Scripts](scripts/README.md)** - Git hooks and development tools for automated versioning
 
 ## 📊 Sample Output
 
@@ -34,9 +35,9 @@ The script provides multiple views of your VM inventory:
 ============================================================================================
 VM-Inventory | Version: v1.0.3 | Build: 012 | SHA-1: a1b2c3d | Date: 2025-01-23 14:30:15 EST
 ============================================================================================
-Description      : VMware Workstation inventory tool that scans and analyzes virtual machine environments
+Description      : VMware Workstation VM inventory CLI tool
 Author           : Massimo Max Mirabito
-Email            : user@example.com
+GitHub           : @MMirabito
 
 Console Width    : 180
 Script Location  : D:\MyProjects\VM-Inventroy
@@ -69,9 +70,8 @@ Total Size       : 1.63 TB  (1,672.18 GB)
 ```
 # Name                    VmType     Parent           SnapshotCount Path                              OS                    Size      Created             
 - ----------------------- ---------- ---------------- ------------- --------------------------------- --------------------- --------- --------------------
-1 Windows-10-Base         Standalone                  2             D:\VMs\Windows-10-Base           Windows 10 x64        67.76 GB  2021-06-12 09:19:16
-2 Ubuntu-20.04-LTS        Standalone                  0             D:\VMs\Ubuntu-20.04-LTS          Ubuntu 20.04.3 LTS    12.34 GB  2021-08-15 10:30:22
-
+1 Windows-10-Base         Standalone                  2             D:\VMs\Windows-10-Base            Windows 10 x64        67.76 GB  2021-06-12 09:19:16
+2 Ubuntu-20.04-LTS        Standalone                  0             D:\VMs\Ubuntu-20.04-LTS           Ubuntu 20.04.3 LTS    12.34 GB  2021-08-15 10:30:22
 3 Development-Clone       Clone      Windows-10-Base  1             D:\VMs\Development-Clone          Windows 10 x64        96.52 GB  2021-11-03 17:23:42
 4 Testing-Environment     Clone      Windows-10-Base  0             D:\VMs\Testing-Environment        Windows 10 x64        45.18 GB  2022-01-15 09:45:30
 ```
@@ -83,7 +83,7 @@ Virtual Machine Hierarchy:
 +-- Windows-10-Base              Windows 10 x64           67.76 GB     2021-06-12 09:19:16
 |   |── Development-Clone        Windows 10 x64           96.52 GB     2021-11-03 17:23:42
 |   |── Testing-Environment      Windows 10 x64           45.18 GB     2022-01-15 09:45:30
-+-- Ubuntu-20.04-LTS             Ubuntu 20.04.3 LTS      12.34 GB     2021-08-15 10:30:22
++-- Ubuntu-20.04-LTS             Ubuntu 20.04.3 LTS       12.34 GB     2021-08-15 10:30:22
 +-- Windows-Server-2019          Windows Server 2019      89.45 GB     2021-09-10 14:20:15
 |   |── Domain-Controller        Windows Server 2019      125.67 GB    2021-10-05 11:15:45
 ```
@@ -154,19 +154,25 @@ The script auto-detects your VMware environment by:
 
 ```
 VM-Inventroy/
-├── VM-Inventory.ps1         # Main PowerShell script
-├── run.cmd                  # Batch launcher for easy execution
+├── VM-Inventory.ps1        # Main PowerShell script
+├── run.cmd                 # Batch launcher for easy execution
 ├── app-info.json           # Application metadata and build tracking
-├── .git/hooks/pre-commit   # Automated build counter increment hook
+├── scripts/                # Development tools and Git hooks
+│   ├── pre-commit          # Optional Git pre-commit hook
+│   └── README.md           # Hook installation guide
+├── ARCHITECTURE.md         # Technical documentation
 ├── LICENSE                 # Apache 2.0 License
 └── README.md               # This file
 ```
 
 ## 🔧 Development Features
 
-### Automated Build Versioning
+### Optional: Automated Build Versioning
 
-This project includes a Git pre-commit hook that automatically increments the build counter in `app-info.json` with each commit. This provides automatic version tracking for development builds.
+This project includes an optional Git pre-commit hook that automatically increments the build counter in `app-info.json` with each commit. This provides automatic version tracking for development builds.
+
+**Installation:**
+The hook is completely optional. See **[Development Scripts Guide](scripts/README.md)** for detailed installation instructions.
 
 **How it works:**
 - Before each commit, the hook reads the current build counter from `app-info.json`
@@ -175,25 +181,11 @@ This project includes a Git pre-commit hook that automatically increments the bu
 - Stages the updated file for the commit
 
 **Dependencies:**
-- **jq**: JSON command-line processor
-  ```bash
-  # Install on Windows
-  winget install jqlang.jq
-  
-  # Install on Linux/macOS
-  sudo apt install jq    # Ubuntu/Debian
-  brew install jq        # macOS
-  ```
+- **jq**: JSON command-line processor (install with `winget install jqlang.jq`)
+- The hook gracefully skips if jq is not available
 
-**Manual Setup** (if needed):
-```bash
-# Make the hook executable (Linux/macOS)
-chmod +x .git/hooks/pre-commit
-
-# On Windows, Git Bash handles execution automatically
-```
-
-The hook will automatically skip if `jq` is not available, allowing commits to continue without interruption.
+**For Contributors:**
+Installing the hook is completely optional. The project works perfectly without it, but it provides automated versioning for those who want it.
 
 ## 🔍 How It Works
 

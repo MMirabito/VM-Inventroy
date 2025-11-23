@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# Git Pre-commit Hook for VM-Inventory
+# Automatically increments build counter in app-info.json
+#
+# Installation:
+#   Copy this file to .git/hooks/pre-commit and make it executable
+#   On Windows: copy scripts\pre-commit .git\hooks\pre-commit
+#   On Linux/Mac: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#
+# Dependencies:
+#   - jq (JSON processor): winget install jqlang.jq
+#
+
+APP_INFO="app-info.json"
+
+# Check if app-info.json exists
+if [ ! -f "$APP_INFO" ]; then
+    echo "Warning: $APP_INFO not found. Skipping build counter increment."
+    exit 0
+fi
+
+# Try to find jq in common locations
+JQ_CMD=""
+if command -v jq >/dev/null 2>&1; then
+    JQ_CMD="jq"
+elif [ -f "/usr/local/bin/jq" ]; then
+    JQ_CMD="/usr/local/bin/jq"
+elif [ -f "/opt/homebrew/bin/jq" ]; then
+    JQ_CMD="/opt/homebrew/bin/jq"
+elif [ -f "C:/Program Files/jq/jq.exe" ]; then
+    JQ_CMD="C:/Program Files/jq/jq.exe"
+elif [ -f "$HOME/AppData/Local/Microsoft/WinGet/Packages/jqlang.jq_Microsoft.Winget.Source_*/jq.exe" ]; then
+    JQ_CMD=$(find "$HOME/AppData/Local/Microsoft/WinGet/Packages/" -name "jq.exe" 2>/dev/null | head -1)
+fi
+
+# If jq is not found, skip the hook
+if [ -z "$JQ_CMD" ]; then
+    echo "Info: jq not found. Skipping build counter increment."
+    echo "      Install jq to enable automatic versioning: winget install jqlang.jq"
+    exit 0
+fi
+
+# Read current counter
+CURRENT_COUNTER=$("$JQ_CMD" -r '.build.counter' "$APP_INFO" 2>/dev/null)
+
+# If reading fails, skip
+if [ -z "$CURRENT_COUNTER" ] || [ "$CURRENT_COUNTER" = "null" ]; then
+    echo "Warning: Could not read build counter from $APP_INFO"
+    exit 0
+fi
+
+# Increment counter
+NEW_COUNTER=$((CURRENT_COUNTER + 1))
+
+# Get current UTC timestamp
+TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Update the JSON file
+TEMP_FILE=$(mktemp)
+"$JQ_CMD" --argjson counter "$NEW_COUNTER" --arg timestamp "$TIMESTAMP" \
+    '.build.counter = $counter | .build.lastUpdated = $timestamp' \
+    "$APP_INFO" > "$TEMP_FILE"
+
+if [ $? -eq 0 ]; then
+    mv "$TEMP_FILE" "$APP_INFO"
+    git add "$APP_INFO"
+    echo "Build counter incremented: $CURRENT_COUNTER → $NEW_COUNTER"
+else
+    rm -f "$TEMP_FILE"
+    echo "Error: Failed to update build counter"
+    exit 1
+fi

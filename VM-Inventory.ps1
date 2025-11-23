@@ -130,7 +130,7 @@ function getAppInfo {
                 Name         = $appInfo.app.name
                 Description  = $appInfo.app.description
                 Author       = $appInfo.app.author
-                Email        = $appInfo.app.email
+                GitHubHandle = $appInfo.app.githubHandle
                 Version      = $appInfo.app.version
                 BuildCounter = $appInfo.build.counter
                 LastUpdated  = $appInfo.build.lastUpdated
@@ -158,7 +158,7 @@ function getAppInfo {
         Name        = "VM-Inventory"
         Description = "VMware Workstation VM inventory tool"
         Author      = "Massimo Max Mirabito"
-        Email       = "N/A"
+        GitHubHandle = "@MMirabito"
         Version     = "v0.0.0"
         BuildCounter = 0
         LastUpdated = "N/A"
@@ -975,7 +975,7 @@ function showAppInfo {
     
     Write-Host "Description      : $($config.AppInfo.Description)" -ForegroundColor Cyan
     Write-Host "Author           : $($config.AppInfo.Author)" -ForegroundColor Cyan
-    Write-Host "Email            : $($config.AppInfo.Email)" -ForegroundColor Cyan
+    Write-Host "GitHub           : $($config.AppInfo.GitHubHandle)" -ForegroundColor Cyan
     write-Host ""
     Write-Host "Console Width    : $currentWidth" -ForegroundColor Yellow
     Write-Host "Script Location  : $($config.Root)" -ForegroundColor Yellow
