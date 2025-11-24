@@ -7,18 +7,19 @@
     "version": "v1.1.1"
   },
   "build": {
-    "counter": 30,
-    "lastUpdated": "2025-11-24T03:08:30Z"
+    "counter": 31,
+    "lastUpdated": "2025-11-24T04:56:10Z"
   },
   "display": {
     "showSummary": true,
     "showHierarchy": true,
-    "debugMode": false
+    "debugMode": true
   },
   "logging": {
     "enableFileLogging": true,
-    "logLevel": "INFO",
+    "logLevel": "DEBUG",
     "logFilePath": ".\\logs\\VM-Inventory_{timestamp}.log",
+    "includeModuleName": false,
     "includeMethodName": false
   }
 }

@@ -37,25 +37,10 @@ $script:LogConfig = @{
     MinLevel = "INFO"  # DEBUG, INFO, WARN, ERROR
     IncludeTimestamp = $true
     IncludeLevel = $true
+    IncludeModuleName = $true        # Show [filename.ps1] in console and file
     IncludeMethodName = $true        # Show [methodName:line] in console and file
     IncludeTimestampInFile = $true   # Full logging in files
     IncludeLevelInFile = $true       # Full logging in files
-}
-
-# Log level priorities
-$script:LogLevels = @{
-    "DEBUG" = 0
-    "INFO"  = 1
-    "WARN"  = 2
-    "ERROR" = 3
-}
-
-# Color mapping for console output
-$script:LogColors = @{
-    "DEBUG" = "Gray"
-    "INFO"  = "Green"
-    "WARN"  = "Yellow"
-    "ERROR" = "Red"
 }
 
 # ==========================================================
@@ -66,11 +51,13 @@ function initializeLogging {
         [bool]$enableFileLogging = $false,
         [string]$logDirectory = $null,
         [string]$minLevel = "INFO",
+        [bool]$includeModuleName = $true,
         [bool]$includeMethodName = $true
     )
 
     $script:LogConfig.EnableFile = $enableFileLogging
     $script:LogConfig.MinLevel = $minLevel
+    $script:LogConfig.IncludeModuleName = $includeModuleName
     $script:LogConfig.IncludeMethodName = $includeMethodName
 
     if ($enableFileLogging) {
@@ -108,21 +95,29 @@ function _log {
         
         [Parameter(Mandatory=$true)]
         [AllowEmptyString()]
+        [string]$ModuleName,
+        
+        [Parameter(Mandatory=$true)]
+        [AllowEmptyString()]
         [string]$MethodName,
         
         [Parameter(Mandatory=$true)]
         [string]$LineNumber,
         
-        [hashtable]$Data = $null,
+        $Data = $null,
         $Color = $null,
         $ErrorRecord = $null
     )
 
-    # Check if this log level should be output
-    $currentLevelPriority = $script:LogLevels[$script:LogConfig.MinLevel]
-    $messageLevelPriority = $script:LogLevels[$Level]
+    # Check if this log level should be output (DEBUG=0, INFO=1, WARN=2, ERROR=3)
+    $levelPriority = @{ 
+        "DEBUG" = 0; 
+        "INFO" = 1; 
+        "WARN" = 2; 
+        "ERROR" = 3 
+    }
 
-    if ($messageLevelPriority -lt $currentLevelPriority) {
+    if ($levelPriority[$Level] -lt $levelPriority[$script:LogConfig.MinLevel]) {
         return  # Skip messages below minimum level
     }
 
@@ -138,18 +133,19 @@ function _log {
         $logParts += "[" + $Level.PadRight(5) + "]"
     }
     
+    # Add module/file name if configured
+    if ($script:LogConfig.IncludeModuleName -and $ModuleName) {
+        $logParts += "[$ModuleName]"
+    }
+    
+    # Add method name and line number if configured
     if ($script:LogConfig.IncludeMethodName -and $MethodName) {
-        # Format: [function_name:line_number] with total max width of 25 chars
-        # Apply smart truncation showing prefix...suffix for long names
-        $maxTotalWidth = 25
-        
         if ($LineNumber) {
             $paddedLineNumber = $LineNumber.ToString().PadLeft(4)
-            $colonAndLine = ":$paddedLineNumber"  # ":1234" = 5 chars
-            $availableForMethod = $maxTotalWidth - $colonAndLine.Length - 2  # -2 for brackets []
+            $colonAndLine = ":$paddedLineNumber"
+            $availableForMethod = 25 - $colonAndLine.Length - 2
             
             if ($MethodName.Length -gt $availableForMethod) {
-                # Smart truncation: show prefix...suffix
                 $ellipsis = "..."
                 $remainingSpace = $availableForMethod - $ellipsis.Length
                 $prefixLen = [Math]::Floor($remainingSpace / 2)
@@ -167,8 +163,7 @@ function _log {
             $logParts += "[${paddedMethodName}${colonAndLine}]"
         }
         else {
-            # No line number - use full 23 chars for method name (25 - 2 for brackets)
-            $availableForMethod = $maxTotalWidth - 2
+            $availableForMethod = 23
             
             if ($MethodName.Length -gt $availableForMethod) {
                 $ellipsis = "..."
@@ -190,7 +185,6 @@ function _log {
     }
     elseif (-not $script:LogConfig.IncludeMethodName -and $LineNumber) {
         # Method name suppressed but show line number: [line]
-        # Just show the line number without extra padding
         $paddedLineNumber = $LineNumber.ToString().PadLeft(4)
         $logParts += "[${paddedLineNumber}]"
     }
@@ -205,11 +199,10 @@ function _log {
     if ($script:LogConfig.EnableConsole) {
         # Metadata color based on log level
         $metadataColor = switch ($Level) {
-            "DEBUG" { "Gray" }
+            "DEBUG" { "DarkYellow" }
             "INFO"  { "Green" }
             "WARN"  { "Yellow" }
-            "ERROR" { "Red" }
-            default { "Green" }
+            "ERROR" { "DarkRed" }
         }
         
         # Message color: custom if provided, otherwise use log level color
@@ -218,6 +211,30 @@ function _log {
         # Output metadata and message with separate colors
         Write-Host $metadata -ForegroundColor $metadataColor -NoNewline
         Write-Host " $messageText" -ForegroundColor $messageColor
+        
+        # Handle data output to console based on type
+        if ($Data) {
+            if ($Data -is [PSCustomObject]) {
+                # Multi-line JSON for PSCustomObject
+                $jsonLines = ($Data | ConvertTo-Json -Depth 3) -split "`n"
+                foreach ($line in $jsonLines) {
+                    Write-Host $metadata -ForegroundColor $metadataColor -NoNewline
+                    Write-Host " $line" -ForegroundColor $messageColor
+                }
+            }
+            elseif ($Data -is [hashtable]) {
+                # Single-line compressed JSON for hashtable
+                $dataJson = $Data | ConvertTo-Json -Depth 3 -Compress
+                Write-Host $metadata -ForegroundColor $metadataColor -NoNewline
+                Write-Host " Data: $dataJson" -ForegroundColor $messageColor
+            }
+            else {
+                # Fallback for other types
+                $dataJson = $Data | ConvertTo-Json -Depth 3 -Compress
+                Write-Host $metadata -ForegroundColor $metadataColor -NoNewline
+                Write-Host " Data: $dataJson" -ForegroundColor $messageColor
+            }
+        }
     }
 
     # File output (identical to console output)
@@ -300,8 +317,23 @@ function _log {
         
         # Add data if provided
         if ($logData) {
-            $dataJson = $logData | ConvertTo-Json -Depth 3 -Compress
-            "  Data: $dataJson" | Out-File -FilePath $script:LogConfig.LogFilePath -Append -Encoding UTF8
+            # Check if it's a PSCustomObject and format as multi-line JSON
+            if ($logData -is [PSCustomObject]) {
+                $jsonLines = ($logData | ConvertTo-Json -Depth 3) -split "`n"
+                foreach ($line in $jsonLines) {
+                    "  $line" | Out-File -FilePath $script:LogConfig.LogFilePath -Append -Encoding UTF8
+                }
+            }
+            # Handle hashtables as before
+            elseif ($logData -is [hashtable]) {
+                $dataJson = $logData | ConvertTo-Json -Depth 3 -Compress
+                "  Data: $dataJson" | Out-File -FilePath $script:LogConfig.LogFilePath -Append -Encoding UTF8
+            }
+            # Fallback for other types
+            else {
+                $dataJson = $logData | ConvertTo-Json -Depth 3 -Compress
+                "  Data: $dataJson" | Out-File -FilePath $script:LogConfig.LogFilePath -Append -Encoding UTF8
+            }
         }
     }
 }
@@ -325,19 +357,21 @@ function logDebug {
         [Parameter(Mandatory=$true)]
         [AllowEmptyString()]
         [string]$Message,
-        [hashtable]$Data = $null,
+        $Data = $null,
         $Color = $null
     )
+    $caller = (Get-PSCallStack)[1]
+    $moduleName = if ($caller.ScriptName) { Split-Path -Leaf $caller.ScriptName } else { "VM-Inventory.ps1" }
+    
     if ($script:LogConfig.IncludeMethodName) {
-        $caller = (Get-PSCallStack)[1]
         $callerName = $caller.FunctionName
         if (-not $callerName -or $callerName -eq '<ScriptBlock>') {
             $callerName = "main"
         }
-        _log -Message $Message -Level DEBUG -MethodName $callerName -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color
+        _log -Message $Message -Level DEBUG -ModuleName $moduleName -MethodName $callerName -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color
     }
     else {
-        _log -Message $Message -Level DEBUG -MethodName "" -LineNumber (Get-PSCallStack)[1].ScriptLineNumber -Data $Data -Color $Color
+        _log -Message $Message -Level DEBUG -ModuleName $moduleName -MethodName "" -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color
     }
 }
 
@@ -346,19 +380,21 @@ function logInfo {
         [Parameter(Mandatory=$true)]
         [AllowEmptyString()]
         [string]$Message,
-        [hashtable]$Data = $null,
+        $Data = $null,
         $Color = $null
     )
+    $caller = (Get-PSCallStack)[1]
+    $moduleName = if ($caller.ScriptName) { Split-Path -Leaf $caller.ScriptName } else { "VM-Inventory.ps1" }
+    
     if ($script:LogConfig.IncludeMethodName) {
-        $caller = (Get-PSCallStack)[1]
         $callerName = $caller.FunctionName
         if (-not $callerName -or $callerName -eq '<ScriptBlock>') {
             $callerName = "main"
         }
-        _log -Message $Message -Level INFO -MethodName $callerName -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color
+        _log -Message $Message -Level INFO -ModuleName $moduleName -MethodName $callerName -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color
     }
     else {
-        _log -Message $Message -Level INFO -MethodName "" -LineNumber (Get-PSCallStack)[1].ScriptLineNumber -Data $Data -Color $Color
+        _log -Message $Message -Level INFO -ModuleName $moduleName -MethodName "" -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color
     }
 }
 
@@ -367,19 +403,21 @@ function logWarn {
         [Parameter(Mandatory=$true)]
         [AllowEmptyString()]
         [string]$Message,
-        [hashtable]$Data = $null,
+        $Data = $null,
         $Color = $null
     )
+    $caller = (Get-PSCallStack)[1]
+    $moduleName = if ($caller.ScriptName) { Split-Path -Leaf $caller.ScriptName } else { "VM-Inventory.ps1" }
+    
     if ($script:LogConfig.IncludeMethodName) {
-        $caller = (Get-PSCallStack)[1]
         $callerName = $caller.FunctionName
         if (-not $callerName -or $callerName -eq '<ScriptBlock>') {
             $callerName = "main"
         }
-        _log -Message $Message -Level WARN -MethodName $callerName -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color
+        _log -Message $Message -Level WARN -ModuleName $moduleName -MethodName $callerName -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color
     }
     else {
-        _log -Message $Message -Level WARN -MethodName "" -LineNumber (Get-PSCallStack)[1].ScriptLineNumber -Data $Data -Color $Color
+        _log -Message $Message -Level WARN -ModuleName $moduleName -MethodName "" -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color
     }
 }
 
@@ -388,20 +426,22 @@ function logError {
         [Parameter(Mandatory=$true)]
         [AllowEmptyString()]
         [string]$Message,
-        [hashtable]$Data = $null,
+        $Data = $null,
         $Color = $null,
         [System.Management.Automation.ErrorRecord]$ErrorRecord = $null
     )
+    $caller = (Get-PSCallStack)[1]
+    $moduleName = if ($caller.ScriptName) { Split-Path -Leaf $caller.ScriptName } else { "VM-Inventory.ps1" }
+    
     if ($script:LogConfig.IncludeMethodName) {
-        $caller = (Get-PSCallStack)[1]
         $callerName = $caller.FunctionName
         if (-not $callerName -or $callerName -eq '<ScriptBlock>') {
             $callerName = "main"
         }
-        _log -Message $Message -Level ERROR -MethodName $callerName -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color -ErrorRecord $ErrorRecord
+        _log -Message $Message -Level ERROR -ModuleName $moduleName -MethodName $callerName -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color -ErrorRecord $ErrorRecord
     }
     else {
-        _log -Message $Message -Level ERROR -MethodName "" -LineNumber (Get-PSCallStack)[1].ScriptLineNumber -Data $Data -Color $Color -ErrorRecord $ErrorRecord
+        _log -Message $Message -Level ERROR -ModuleName $moduleName -MethodName "" -LineNumber $caller.ScriptLineNumber -Data $Data -Color $Color -ErrorRecord $ErrorRecord
     }
 }
 
@@ -455,11 +495,6 @@ function getAppInfo {
         if (Test-Path $appInfoPath) {
             $appInfo = Get-Content $appInfoPath -Raw | ConvertFrom-Json
             
-            # Debug mode: Display JSON content
-            if ($appInfo.display.debugMode) {
-                logDebug "JSON Configuration Loaded: $($appInfo | ConvertTo-Json -Depth 2 -Compress)"
-            }
-            
             return [PSCustomObject]@{
                 Name         = $appInfo.app.name
                 Description  = $appInfo.app.description
@@ -472,12 +507,12 @@ function getAppInfo {
                 # Display settings
                 ShowSummary  = $appInfo.display.showSummary
                 ShowHierarchy = $appInfo.display.showHierarchy
-                DebugMode    = $appInfo.display.debugMode
 
                 # Logging settings
                 EnableFileLogging = $appInfo.logging.enableFileLogging
                 LogLevel = $appInfo.logging.logLevel
                 LogFilePath = $appInfo.logging.logFilePath
+                IncludeModuleName = if ($null -ne $appInfo.logging.includeModuleName) { $appInfo.logging.includeModuleName } else { $true }
                 IncludeMethodName = if ($null -ne $appInfo.logging.includeMethodName) { $appInfo.logging.includeMethodName } else { $true }
 
                 Available    = $true
@@ -506,7 +541,6 @@ function getAppInfo {
         # Default display settings
         ShowSummary = $true
         ShowHierarchy = $true
-        DebugMode   = $false
 
         # Default logging settings
         EnableFileLogging = $false
@@ -727,11 +761,9 @@ function getVmInfo {
     $vmPath = $vmx.FullName
     $vmDir  = $vmx.DirectoryName
 
-    if ($config.DebugMode) {
-        logDebug "Processing VM: $($vmx.BaseName)" -Data @{
-            VmxPath = $vmPath
-            VmDir = $vmDir
-        }
+    logDebug "Processing VM: $($vmx.BaseName)" -Data @{
+        VmxPath = $vmPath
+        VmDir = $vmDir
     }
 
     # Guest OS - Try VMware Tools data first, fallback to metadata
@@ -740,9 +772,7 @@ function getVmInfo {
     if ($guestInfoOS) {
         # Use accurate OS from VMware Tools
         $friendlyOs = $guestInfoOS
-        if ($config.DebugMode) {
-            logDebug "OS detected from VMware Tools: $friendlyOs"
-        }
+        logDebug "OS detected from VMware Tools: $friendlyOs"
     }
     else {
         # Fallback to VMware metadata with OS mapping
@@ -750,18 +780,14 @@ function getVmInfo {
         if ($osLine) {
             $rawOs = ($osLine.Matches[0].Value -split '=')[1].Trim().Trim('"')
             $friendlyOs = if ($config.OSMap.ContainsKey($rawOs)) { $config.OSMap[$rawOs] } else { $rawOs }
-            if ($config.DebugMode) {
-                logDebug "OS detected from metadata" -Data @{
-                    RawOS = $rawOs
-                    MappedOS = $friendlyOs
-                }
+            logDebug "OS detected from metadata" -Data @{
+                RawOS = $rawOs
+                MappedOS = $friendlyOs
             }
         }
         else {
             $friendlyOs = "Unknown"
-            if ($config.DebugMode) {
-                logDebug "OS detection failed - using Unknown"
-            }
+            logDebug "OS detection failed - using Unknown"
         }
     }
 
@@ -779,11 +805,9 @@ function getVmInfo {
         $size = ("{0:N2} GB" -f ($bytes / 1GB))
     }
 
-    if ($config.DebugMode) {
-        logDebug "Size calculated" -Data @{
-            SizeBytes = $sizeBytes
-            SizeFormatted = $size
-        }
+    logDebug "Size calculated" -Data @{
+        SizeBytes = $sizeBytes
+        SizeFormatted = $size
     }
 
     # Created date
@@ -801,11 +825,9 @@ function getVmInfo {
     $clone = 0
 
     if ($descriptorFile -and $descriptorFile.Length -gt 0) {
-        if ($config.DebugMode) {
-            logDebug "Analyzing disk descriptor" -Data @{
-                DescriptorFile = $descriptorFile.Name
-                FileSize = $descriptorFile.Length
-            }
+        logDebug "Analyzing disk descriptor" -Data @{
+            DescriptorFile = $descriptorFile.Name
+            FileSize = $descriptorFile.Length
         }
 
         $descLines = Get-Content -LiteralPath $descriptorFile.FullName -TotalCount 50 -ErrorAction SilentlyContinue
@@ -830,25 +852,19 @@ function getVmInfo {
                 $standalone = 0
                 $clone = 1
 
-                if ($config.DebugMode) {
-                    logDebug "Clone detected" -Data @{
-                        ParentVM = $parentVmName
-                        ParentDisk = $parentDisk
-                        ParentPath = $parentPath
-                    }
+                logDebug "Clone detected" -Data @{
+                    ParentVM = $parentVmName
+                    ParentDisk = $parentDisk
+                    ParentPath = $parentPath
                 }
             }
         }
         else {
-            if ($config.DebugMode) {
-                logDebug "No parent hint found - Standalone VM"
-            }
+            logDebug "No parent hint found - Standalone VM"
         }
     }
     else {
-        if ($config.DebugMode) {
-            logDebug "No valid descriptor file found"
-        }
+        logDebug "No valid descriptor file found"
     }
 
     # Snapshot Count (calculate after VM type determination)
@@ -861,11 +877,9 @@ function getVmInfo {
         $vmsdContent = Get-Content -Path $vmsdPath -ErrorAction SilentlyContinue
         $snapshotCount = ($vmsdContent | Where-Object { $_ -match '^snapshot[0-9]+\.uid' }).Count
         
-        if ($config.DebugMode) {
-            logDebug "Snapshots counted from .vmsd file" -Data @{
-                VmsdPath = $vmsdPath
-                SnapshotCount = $snapshotCount
-            }
+        logDebug "Snapshots counted from .vmsd file" -Data @{
+            VmsdPath = $vmsdPath
+            SnapshotCount = $snapshotCount
         }
     }
     else {
@@ -877,28 +891,22 @@ function getVmInfo {
             }
             $snapshotCount = $deltaFiles.Count
             
-            if ($config.DebugMode) {
-                logDebug "Snapshots counted from delta files (fallback)" -Data @{
-                    DeltaFilesFound = $deltaFiles.Count
-                    SnapshotCount = $snapshotCount
-                }
+            logDebug "Snapshots counted from delta files (fallback)" -Data @{
+                DeltaFilesFound = $deltaFiles.Count
+                SnapshotCount = $snapshotCount
             }
         }
         else {
-            if ($config.DebugMode) {
-                logDebug "Skipping delta file count - VM is a clone"
-            }
+            logDebug "Skipping delta file count - VM is a clone"
         }
     }
 
-    if ($config.DebugMode) {
-        logDebug "VM processing completed" -Data @{
-            VMName = $vmx.BaseName
-            VMType = $vmType
-            FinalOS = $friendlyOs
-            FinalSize = $size
-            SnapshotCount = $snapshotCount
-        }
+    logDebug "VM processing completed" -Data @{
+        VMName = $vmx.BaseName
+        VMType = $vmType
+        FinalOS = $friendlyOs
+        FinalSize = $size
+        SnapshotCount = $snapshotCount
     }
 
     return [PSCustomObject]@{
@@ -1182,9 +1190,10 @@ function init {
         }
     }
     
-    initializeLogging -enableFileLogging $appInfo.EnableFileLogging -logDirectory $scriptDir -minLevel $appInfo.LogLevel -includeMethodName $appInfo.IncludeMethodName
+    initializeLogging -enableFileLogging $appInfo.EnableFileLogging -logDirectory $scriptDir -minLevel $appInfo.LogLevel -includeModuleName $appInfo.IncludeModuleName -includeMethodName $appInfo.IncludeMethodName
     
     logDebug "Initializing VM-Inventory script"
+    logDebug "JSON Configuration Loaded:" -Data $appInfo
 
     checkConsoleWidth($requiredWidth)
 
@@ -1213,7 +1222,6 @@ function init {
 
     # Use display settings from JSON, with fallback defaults
     $showSummaryTable = $appInfo.ShowSummary
-    $debugMode = $appInfo.DebugMode
 
     # OS mapping (expand as needed)
 	$osMap = @{
@@ -1264,7 +1272,6 @@ function init {
         Root             = $root
         Report           = $report
         ShowSummaryTable = $showSummaryTable
-        DebugMode        = $debugMode
         GitSha           = $gitSha
         AppInfo          = $appInfo
 
@@ -1408,7 +1415,7 @@ function showAppInfo {
     logInfo "Running From     : $($config.RunningFrom)" -Color Yellow
     logInfo "Report Output    : $($config.Report)" -Color Yellow
     logInfo "Show Summary     : $($config.ShowSummaryTable)" -Color Yellow
-    logInfo "Debug Mode       : $($config.DebugMode)" -Color Yellow
+    logInfo "Log Level        : $($config.AppInfo.LogLevel)" -Color Yellow
     logInfo "User Name        : $($config.RunningUsername)" -Color Yellow
     logInfo "Machine Name     : $($config.RunningMachine)" -Color Yellow
     logInfo "Domain           : $(if ($config.RunningDomain) { $config.RunningDomain } else { 'N/A' })" -Color Yellow
@@ -1433,7 +1440,10 @@ function main {
     logDebug "Configuration initialized" -Data @{
         DefaultVmPath = $config.defaultVmPath
         ShowSummaryTable = $config.ShowSummaryTable
-        DebugMode = $config.DebugMode
+        LogLevel = $config.AppInfo.LogLevel
+        Version = $config.AppInfo.Version
+        buildCounter = $config.AppInfo.BuildCounter
+        GitSha = if ($config.GitSha.Available) { $config.GitSha.Short } else { "N/A" } 
     }
 
     # Display Application Info

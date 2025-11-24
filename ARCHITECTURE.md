@@ -296,7 +296,6 @@ graph TD
     
     # Runtime Settings
     ShowSummaryTable = Boolean
-    DebugMode        = Boolean
     OSMap            = Hashtable
     
     # User Context
@@ -328,25 +327,59 @@ graph TD
 }
 ```
 
-## Debug System
+## Logging System
 
-The script includes a comprehensive debug logging system that provides detailed execution traces when enabled.
+The script includes a centralized logging system with multiple output levels and flexible configuration.
 
-### Debug Function Features
-- **Call Stack Analysis**: Automatically determines calling function
-- **Timestamp Logging**: Precise execution timing
-- **Structured Data Display**: Pretty-prints objects as JSON
-- **Line Number Tracking**: Shows exact code location
-- **Conditional Activation**: Only runs when debug mode is enabled
+### Log Levels (Priority-Based Filtering)
+- **DEBUG** (0): Detailed diagnostic information for troubleshooting
+- **INFO** (1): General informational messages
+- **WARN** (2): Warning messages for potential issues
+- **ERROR** (3): Error messages for failures
 
-### Debug Output Format
+### Logging Functions
+- **Core**: `_log()` - Private function handling all logging logic
+- **Wrappers**: `logDebug()`, `logInfo()`, `logWarn()`, `logError()` - Public API
+- **Configuration**: `initializeLogging()` - Sets up logging system
+- **Helpers**: `hideMethodName()`, `showMethodName()` - Toggle method name display
+
+### Log Output Format
 ```
-[2025-01-23 14:30:15] [DEBUG] [    getVmInfo:(123)] Processing VM: Windows-10-Pro
-[2025-01-23 14:30:15] [DEBUG] [    getVmInfo:(123)] {
-[2025-01-23 14:30:15] [DEBUG] [    getVmInfo:(123)]   "VmxPath": "C:\\VMs\\Windows-10-Pro\\Windows-10-Pro.vmx",
-[2025-01-23 14:30:15] [DEBUG] [    getVmInfo:(123)]   "VmDir": "C:\\VMs\\Windows-10-Pro"
-[2025-01-23 14:30:15] [DEBUG] [    getVmInfo:(123)] }
+2025-01-23 14:30:15 [DEBUG] [    getVmInfo:123] Processing VM: Windows-10-Pro
+2025-01-23 14:30:15 [INFO ] [ 456] Total VMs: 15
+2025-01-23 14:30:15 [WARN ] [ 789] Console width is too small
+2025-01-23 14:30:15 [ERROR] [1234] VMware Workstation is NOT installed
 ```
+
+**Format Components**:
+- Timestamp: `yyyy-MM-dd HH:mm:ss`
+- Log Level: `[LEVEL]` (padded to 5 characters)
+- Line Number: `[####]` (padded to 4 digits)
+- Method Name (optional): `[methodName:line]` (padded to 25 characters)
+- Message: Actual log content
+
+### Color Coding
+- **DEBUG**: `DarkGray` - Diagnostic details
+- **INFO**: `Green` - Normal operations
+- **WARN**: `Yellow` - Warnings
+- **ERROR**: `Red` - Errors
+- **Custom**: Messages can override default color
+
+### Configuration
+Logging is configured via `app-info.json`:
+```json
+{
+  "logging": {
+    "enableFileLogging": false,
+    "logLevel": "INFO",
+    "logFilePath": ".\\logs\\VM-Inventory_{timestamp}.log",
+    "includeMethodName": true
+  }
+}
+```
+
+### File Logging
+When enabled, logs are written to timestamped files in the `logs/` directory with identical format to console output (minus colors).
 
 ## Performance Considerations
 
@@ -407,11 +440,13 @@ The script includes a comprehensive debug logging system that provides detailed 
 4. **Missing OS Detection**: Ensure VMware Tools are installed in VMs
 
 ### Debug Mode Activation
-Enable detailed logging by setting `debugMode: true` in app-info.json:
+Enable detailed logging by setting log level to DEBUG in app-info.json:
 ```json
 {
-  "display": {
-    "debugMode": true
+  "logging": {
+    "logLevel": "DEBUG",
+    "enableFileLogging": true,
+    "includeMethodName": true
   }
 }
 ```
