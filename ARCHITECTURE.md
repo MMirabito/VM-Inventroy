@@ -446,6 +446,7 @@ Enable detailed logging by setting log level to DEBUG in app-info.json:
   "logging": {
     "logLevel": "DEBUG",
     "enableFileLogging": true,
+    "includeModuleName": true,
     "includeMethodName": true
   }
 }
