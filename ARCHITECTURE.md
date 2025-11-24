@@ -183,8 +183,7 @@ sequenceDiagram
 - Fallback hardcoded values
 
 **Key Features**:
-- Debug mode detection
-- Display preferences
+- Logging configuration
 - Version and build information
 
 ### 2. VMware Detection Functions
@@ -373,6 +372,7 @@ Logging is configured via `app-info.json`:
     "enableFileLogging": false,
     "logLevel": "INFO",
     "logFilePath": ".\\logs\\VM-Inventory_{timestamp}.log",
+    "includeModuleName": true,
     "includeMethodName": true
   }
 }
