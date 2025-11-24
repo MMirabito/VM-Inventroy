@@ -155,6 +155,33 @@ The batch file automatically launches PowerShell with the correct execution poli
 
 ### Configuration
 
+#### Application Configuration (`app-info.json`)
+
+The script can be configured via the `app-info.json` file:
+
+```json
+{
+  "display": {
+    "showSummary": true,      // Show VM summary table
+    "showHierarchy": true,    // Show hierarchical tree view
+    "debugMode": false        // Enable detailed debug output
+  },
+  "logging": {
+    "enableFileLogging": false,           // Write logs to file
+    "logLevel": "INFO",                   // Minimum log level (DEBUG, INFO, WARN, ERROR)
+    "logFilePath": ".\\logs\\VM-Inventory_{timestamp}.log",
+    "includeMethodName": true             // Show function names in log output
+  }
+}
+```
+
+**Logging Configuration:**
+- `enableFileLogging`: When `true`, creates timestamped log files in the `logs/` directory
+- `logLevel`: Controls which messages are displayed/logged (DEBUG shows all, ERROR shows only errors)
+- `includeMethodName`: When `true`, shows `[functionName:line]` in logs; when `false`, shows only `[line]` for cleaner output
+
+**VMware Environment Detection:**
+
 The script auto-detects your VMware environment by:
 - Reading VMware registry keys
 - Scanning the default VM path from `preferences.ini`
